@@ -58,8 +58,6 @@ final class SearchPanelController {
         let panel = makePanel()
         self.panel = panel
 
-        position(panel)
-
         // Activation first, unconditionally.
         //
         // `isKeyWindow` is not the question it looks like: key window is per application, so
@@ -125,8 +123,12 @@ final class SearchPanelController {
     // MARK: - The panel
 
     private func makePanel() -> NSPanel {
+        // Born where it will be shown, rather than created at the origin and moved there.
+        // A window created on one display and moved to another with a different backing scale
+        // keeps rasterised content from the display it was born on — which is what turned the
+        // row icons into fragments of themselves on the second screen.
         let panel = SearchPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 620, height: 440),
+            contentRect: frameForCurrentScreen(),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -147,20 +149,23 @@ final class SearchPanelController {
         return panel
     }
 
-    /// Centred on the screen holding the pointer, a third of the way down — where Spotlight
+    /// Centred on the screen holding the pointer, a sixth of the way down — where Spotlight
     /// and everything like it puts itself, and far enough from the menu bar not to read as
     /// hanging off the icon.
-    private func position(_ panel: NSPanel) {
+    private func frameForCurrentScreen() -> NSRect {
+        let size = NSSize(width: 620, height: 440)
         let mouse = NSEvent.mouseLocation
         let screen = NSScreen.screens.first { $0.frame.contains(mouse) } ?? NSScreen.main
-        guard let visible = screen?.visibleFrame else { return }
 
-        let size = panel.frame.size
-        panel.setFrameOrigin(
-            NSPoint(
-                x: visible.midX - size.width / 2,
-                y: visible.maxY - size.height - visible.height * 0.16
-            )
+        guard let visible = screen?.visibleFrame else {
+            return NSRect(origin: .zero, size: size)
+        }
+
+        return NSRect(
+            x: visible.midX - size.width / 2,
+            y: visible.maxY - size.height - visible.height * 0.16,
+            width: size.width,
+            height: size.height
         )
     }
 

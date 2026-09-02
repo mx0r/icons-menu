@@ -72,6 +72,14 @@ final class SearchPanelContentView: NSVisualEffectView {
         window?.firstResponder === field.currentEditor()
     }
 
+    /// Rows hold rasterised application icons, so a move to a display with a different scale
+    /// means drawing them again — otherwise what is on screen is a bitmap made for the other
+    /// display, stretched or cropped into the same 20 points.
+    override func viewDidChangeBackingProperties() {
+        super.viewDidChangeBackingProperties()
+        table.reloadData()
+    }
+
     // MARK: - Building
 
     private func buildField() {
