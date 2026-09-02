@@ -349,6 +349,10 @@ private final class SearchRowView: NSTableCellView {
         trailing.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
         trailing.textColor = .tertiaryLabelColor
 
+        // The image is already the size of its frame, so this only guards against a source
+        // that has no representation at that size at all.
+        icon.imageScaling = .scaleProportionallyUpOrDown
+
         highlight.wantsLayer = true
         highlight.layer?.cornerRadius = 7
         highlight.layer?.cornerCurve = .continuous

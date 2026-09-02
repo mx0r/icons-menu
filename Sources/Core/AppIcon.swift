@@ -3,90 +3,27 @@ import AppKit
 /// Another application's icon, sized for a row.
 public enum AppIcon {
 
-    /// A copy with one bitmap per attached display scale.
+    /// A copy of the shared icon with a new *nominal* size, and every representation intact.
     ///
-    /// Three things this is working around, all of which look the same on screen — a garbled
-    /// icon that is really a fragment of one drawn at the wrong scale:
+    /// The copy is not optional: `NSRunningApplication.icon` is shared, and setting a size on
+    /// it changes that icon for everything else in the process.
     ///
-    /// - `NSRunningApplication.icon` is *shared*. Setting a size on it changes it for every
-    ///   other user of that icon in the process.
-    /// - Handing a view the 1024pt master and letting it squeeze that into 20pt leaves the
-    ///   choice of representation, and the scale it is rasterised at, to whatever the view
-    ///   happens to know at the time.
-    /// - A drawing-handler image (`NSCustomImageRep`) is supposed to be re-run per scale, and
-    ///   is not reliably re-run when a window moves between displays of different scale.
+    /// What matters more is what this does *not* do — it does not resample. An `.icns` holds
+    /// separately drawn representations at 16, 32, 128, 256 and 512 points, each hinted for
+    /// its size, and setting `size` only says which point size the image now claims to be.
+    /// AppKit then picks the representation matching the device pixels it is about to fill:
+    /// 16 points on a 1× display draws the 16-pixel artwork, on a 2× display the 32-pixel one.
     ///
-    /// Explicit bitmaps sidestep all of it: the image carries a representation for each scale
-    /// in use, and AppKit picks between them the way it does for any ordinary image.
+    /// Anything that flattens the image first — drawing it into a bitmap of a chosen scale, or
+    /// handing a view the 32-point original and letting the view squeeze it down — throws that
+    /// choice away and leaves a resampled 20 pixels of a 32-pixel drawing. It looks passable
+    /// on a Retina display, where there are twice as many pixels to hide it in, and obviously
+    /// wrong on a 1× one beside it.
     public static func forProcess(_ pid: pid_t, size: CGFloat) -> NSImage? {
-        guard let source = NSRunningApplication(processIdentifier: pid)?.icon else { return nil }
-        return resized(source, to: size)
-    }
-
-    static func resized(_ source: NSImage, to size: CGFloat) -> NSImage {
-        let points = NSSize(width: size, height: size)
-        let image = NSImage(size: points)
-
-        for scale in scalesInUse() {
-            guard let rep = bitmap(of: source, points: points, scale: scale) else { continue }
-            image.addRepresentation(rep)
-        }
-
-        // Nothing was drawn — no displays, or a source that refuses to draw. A blurry icon
-        // beats none.
-        if image.representations.isEmpty {
-            let copy = source.copy() as! NSImage
-            copy.size = points
-            return copy
-        }
-        return image
-    }
-
-    /// Every backing scale currently attached, so an icon made on the laptop still has a 1×
-    /// representation for the external display next to it. 2× is always included: displays
-    /// come and go, and the panel outlives the moment it was built in.
-    private static func scalesInUse() -> [CGFloat] {
-        let attached = NSScreen.screens.map(\.backingScaleFactor)
-        return Array(Set(attached + [2])).sorted()
-    }
-
-    private static func bitmap(
-        of source: NSImage,
-        points: NSSize,
-        scale: CGFloat
-    ) -> NSBitmapImageRep? {
-        let pixels = NSSize(width: points.width * scale, height: points.height * scale)
-
-        guard
-            let rep = NSBitmapImageRep(
-                bitmapDataPlanes: nil,
-                pixelsWide: Int(pixels.width),
-                pixelsHigh: Int(pixels.height),
-                bitsPerSample: 8,
-                samplesPerPixel: 4,
-                hasAlpha: true,
-                isPlanar: false,
-                colorSpaceName: .deviceRGB,
-                bytesPerRow: 0,
-                bitsPerPixel: 0
-            )
+        guard let icon = NSRunningApplication(processIdentifier: pid)?.icon?.copy() as? NSImage
         else { return nil }
 
-        // The point size is what makes this a `scale`× representation rather than a larger
-        // 1× one; without it AppKit would draw the 2× bitmap at twice the size.
-        rep.size = points
-
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
-        NSGraphicsContext.current?.imageInterpolation = .high
-        source.draw(
-            in: NSRect(origin: .zero, size: points),
-            from: .zero,
-            operation: .copy,
-            fraction: 1
-        )
-        NSGraphicsContext.restoreGraphicsState()
-
-        return rep
+        icon.size = NSSize(width: size, height: size)
+        return icon
     }
 }
