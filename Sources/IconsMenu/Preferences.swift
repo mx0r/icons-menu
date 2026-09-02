@@ -10,15 +10,25 @@ final class Preferences: ObservableObject {
 
     static let shared = Preferences()
 
-    /// Applications kept out of the dropdown, by bundle ID.
-    ///
-    /// Per application rather than per item, because the menu groups that way and because an
-    /// item's ordinal shifts as its app adds or drops items — a set of item ids would quietly
-    /// start hiding the wrong thing.
+    /// Applications kept out of the dropdown, by bundle ID. Hides everything the app
+    /// contributes, which for Control Center is seven items behind one switch.
     @Published var hiddenBundleIDs: Set<String> {
         didSet {
             guard hiddenBundleIDs != oldValue else { return }
             defaults.set(hiddenBundleIDs.sorted(), forKey: Key.hidden)
+        }
+    }
+
+    /// Individual items kept out, by `StatusItem.id` — `bundleID#index`.
+    ///
+    /// That ordinal is the only identity most items have, since they carry no AX label, and
+    /// it is stable for as long as the app contributes the same items in the same order. An
+    /// app that starts adding or dropping items can shift the ordinals under a saved id, so
+    /// this is the granularity to use deliberately; the app-level switch is the robust one.
+    @Published var hiddenItemIDs: Set<String> {
+        didSet {
+            guard hiddenItemIDs != oldValue else { return }
+            defaults.set(hiddenItemIDs.sorted(), forKey: Key.hiddenItems)
         }
     }
 
@@ -35,6 +45,7 @@ final class Preferences: ObservableObject {
 
     private enum Key {
         static let hidden = "HiddenBundleIDs"
+        static let hiddenItems = "HiddenItemIDs"
         static let hotkeyKeyCode = "HotkeyKeyCode"
         static let hotkeyModifiers = "HotkeyModifiers"
         static let hotkeyLabel = "HotkeyLabel"
@@ -43,6 +54,7 @@ final class Preferences: ObservableObject {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         hiddenBundleIDs = Set(defaults.stringArray(forKey: Key.hidden) ?? [])
+        hiddenItemIDs = Set(defaults.stringArray(forKey: Key.hiddenItems) ?? [])
 
         // All three parts or none: a half-written shortcut would register something the label
         // does not describe, which is worse than falling back to the default.
@@ -59,11 +71,11 @@ final class Preferences: ObservableObject {
         }
     }
 
-    func isHidden(_ bundleID: String) -> Bool {
+    func isHidden(app bundleID: String) -> Bool {
         hiddenBundleIDs.contains(bundleID)
     }
 
-    func setHidden(_ hidden: Bool, for bundleID: String) {
+    func setHidden(_ hidden: Bool, app bundleID: String) {
         if hidden {
             hiddenBundleIDs.insert(bundleID)
         } else {
@@ -71,9 +83,30 @@ final class Preferences: ObservableObject {
         }
     }
 
-    /// The only way back for an application that has since quit: it is not in the inventory,
-    /// so there is no row to switch back on.
+    func isHidden(item itemID: String) -> Bool {
+        hiddenItemIDs.contains(itemID)
+    }
+
+    func setHidden(_ hidden: Bool, item itemID: String) {
+        if hidden {
+            hiddenItemIDs.insert(itemID)
+        } else {
+            hiddenItemIDs.remove(itemID)
+        }
+    }
+
+    /// Whether this item reaches the menu, which takes both switches: an application hidden
+    /// as a whole takes its items with it.
+    func isVisible(_ item: StatusItem) -> Bool {
+        !isHidden(app: item.bundleID) && !isHidden(item: item.id)
+    }
+
+    var hiddenCount: Int { hiddenBundleIDs.count + hiddenItemIDs.count }
+
+    /// The only way back for anything belonging to an application that has since quit: it is
+    /// not in the inventory, so there is no row to switch back on.
     func showAll() {
         hiddenBundleIDs = []
+        hiddenItemIDs = []
     }
 }

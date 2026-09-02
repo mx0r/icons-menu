@@ -219,9 +219,10 @@ final class MenuController: NSObject, NSMenuDelegate {
         // then worked. A warm-up timer keeps the cache populated instead.
         inventory = cachedInventory
 
-        // Applying the hidden set here, on every open, is what makes Settings take effect
-        // immediately — there is nothing to notify and nothing to invalidate.
-        let visible = inventory.items.filter { !preferences.isHidden($0.bundleID) }
+        // Applying the hidden sets here, on every open, is what makes Settings take effect
+        // immediately — there is nothing to notify and nothing to invalidate. Filtering before
+        // grouping is what lets an app left with one visible item collapse back to a plain row.
+        let visible = inventory.items.filter(preferences.isVisible)
 
         if inventory.items.isEmpty {
             menu.addItem(disabledItem(rescanning ? "Scanning menu bar…" : "No menu bar items found"))

@@ -42,10 +42,10 @@ private struct AppEntry: Identifiable {
     let bundleID: String
     let name: String
     let pid: pid_t
-    let itemCount: Int
-    let offScreenCount: Int
+    let items: [StatusItem]
 
     var id: String { bundleID }
+    var offScreenCount: Int { items.filter { !$0.isOnScreen }.count }
 }
 
 struct SettingsView: View {
@@ -53,6 +53,7 @@ struct SettingsView: View {
     @StateObject private var model = InventoryModel()
     @StateObject private var launchAtLogin = LaunchAtLogin()
     @ObservedObject private var preferences = Preferences.shared
+    @State private var expanded: Set<String> = []
 
     var body: some View {
         VStack(spacing: 0) {
@@ -74,18 +75,46 @@ struct SettingsView: View {
         ) { _ in launchAtLogin.refresh() }
     }
 
-    /// One row per application, matching the dropdown, with a switch that keeps it out.
+    /// One row per application, matching the dropdown, with a switch that keeps it out — and
+    /// for an app contributing several items, a disclosure holding a switch per item.
     ///
-    /// The switch is the point of this list. What used to be here — an "Open" button per
+    /// Both levels, because both are wanted: one switch for all seven of Control Center's
+    /// items, and a way to drop just the two of them you never use. The disclosure only
+    /// appears where there is something to disclose.
+    ///
+    /// The switches are the point of this list. What used to be here — an "Open" button per
     /// item, each item's x position, a separate section for off-screen items — was a view of
     /// the same data the menu already presents better, so it has gone. Off-screen is still
     /// worth knowing and survives as a caption.
     private var appList: some View {
         List {
             Section("Show in the menu") {
-                ForEach(apps) { row(for: $0) }
+                ForEach(apps) { app in
+                    if app.items.count > 1 {
+                        DisclosureGroup(isExpanded: expansion(for: app)) {
+                            ForEach(app.items) { itemRow($0, in: app) }
+                        } label: {
+                            row(for: app)
+                        }
+                    } else {
+                        row(for: app)
+                    }
+                }
             }
         }
+    }
+
+    private func expansion(for app: AppEntry) -> Binding<Bool> {
+        Binding(
+            get: { expanded.contains(app.bundleID) },
+            set: { isExpanded in
+                if isExpanded {
+                    expanded.insert(app.bundleID)
+                } else {
+                    expanded.remove(app.bundleID)
+                }
+            }
+        )
     }
 
     /// Annotated at every step: left to infer, this expression is one the type checker spends
@@ -100,8 +129,7 @@ struct SettingsView: View {
                 bundleID: bundleID,
                 name: Inventory.displayName(for: items[0]),
                 pid: items[0].pid,
-                itemCount: items.count,
-                offScreenCount: items.filter { !$0.isOnScreen }.count
+                items: items
             )
         }
         return entries.sorted {
@@ -127,8 +155,8 @@ struct SettingsView: View {
             Toggle(
                 "Show \(app.name) in the menu",
                 isOn: Binding(
-                    get: { !preferences.isHidden(app.bundleID) },
-                    set: { preferences.setHidden(!$0, for: app.bundleID) }
+                    get: { !preferences.isHidden(app: app.bundleID) },
+                    set: { preferences.setHidden(!$0, app: app.bundleID) }
                 )
             )
             .labelsHidden()
@@ -138,12 +166,40 @@ struct SettingsView: View {
         .padding(.vertical, 2)
     }
 
+    private func itemRow(_ item: StatusItem, in app: AppEntry) -> some View {
+        HStack(spacing: 8) {
+            Text(Inventory.itemName(for: item))
+            if !item.isOnScreen {
+                Text("off-screen")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Toggle(
+                "Show this item in the menu",
+                isOn: Binding(
+                    get: { !preferences.isHidden(item: item.id) },
+                    set: { preferences.setHidden(!$0, item: item.id) }
+                )
+            )
+            .labelsHidden()
+            .toggleStyle(.switch)
+            .controlSize(.mini)
+        }
+        // A hidden application takes its items with it, so these have nothing to say until it
+        // is switched back on. Their own state is kept, not cleared.
+        .disabled(preferences.isHidden(app: app.bundleID))
+        .padding(.vertical, 1)
+    }
+
     private func subtitle(for app: AppEntry) -> String {
         var parts = [app.bundleID]
-        if app.itemCount > 1 { parts.append("\(app.itemCount) items") }
+        if app.items.count > 1 { parts.append("\(app.items.count) items") }
         if app.offScreenCount > 0 {
             parts.append(
-                app.offScreenCount == app.itemCount
+                app.offScreenCount == app.items.count
                     ? "off-screen"
                     : "\(app.offScreenCount) off-screen"
             )
@@ -205,7 +261,7 @@ struct SettingsView: View {
             Spacer()
             // The only way back for an app that has since quit: hidden but with no row to
             // switch on, it would otherwise stay hidden forever.
-            if !preferences.hiddenBundleIDs.isEmpty {
+            if preferences.hiddenCount > 0 {
                 Button("Show all") { preferences.showAll() }
             }
             Button("Rescan") { model.refresh() }
@@ -215,11 +271,15 @@ struct SettingsView: View {
 
     private var summary: String {
         guard model.isTrusted else { return "Not authorised" }
-        let count = apps.count
-        let hidden = preferences.hiddenBundleIDs.count
-        return hidden == 0
-            ? "\(count) applications"
-            : "\(count) applications, \(hidden) hidden"
+
+        var parts = ["\(apps.count) applications"]
+        let hiddenApps = preferences.hiddenBundleIDs.count
+        let hiddenItems = preferences.hiddenItemIDs.count
+        if hiddenApps > 0 { parts.append("\(hiddenApps) hidden") }
+        if hiddenItems > 0 {
+            parts.append("\(hiddenItems) \(hiddenItems == 1 ? "item" : "items") hidden")
+        }
+        return parts.joined(separator: ", ")
     }
 }
 

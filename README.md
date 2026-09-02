@@ -208,13 +208,25 @@ Icons Menu is subject to the same overflow it exists to solve, so:
 
 ## Settings
 
-One row per application, with a switch that keeps it out of the dropdown. Hiding is keyed to
-the **bundle ID**, not to item ids: an item's ordinal shifts as its app adds or drops items,
-so a saved set of item ids would quietly start hiding the wrong thing. It also matches how
-the menu groups, so one switch covers all seven of Control Center's items.
+One row per application, with a switch that keeps it out of the dropdown. An application
+contributing more than one item expands, with a switch per item inside — one switch for all
+seven of Control Center's items, or a way to drop just the two you never use. The disclosure
+only appears where there is something to disclose.
 
-The hidden set is applied while the menu is being rebuilt, which happens on every open — so
-a switch takes effect immediately, with nothing to invalidate and no reload to trigger.
+The two levels are stored separately and keyed differently. Applications are keyed by
+**bundle ID**, which is as stable as identity gets here. Items are keyed by
+`bundleID#index`, the ordinal within their app's extras menu bar, because most items carry
+no AX label and there is nothing else to key them by — stable for as long as an app
+contributes the same items in the same order, and liable to shift under a saved id if it
+does not. The app-level switch is the robust one; the per-item switches are the precise one.
+
+Hiding an application disables its item switches rather than clearing them, so switching it
+back on restores what was there before.
+
+Both sets are applied while the menu is being rebuilt, which happens on every open — so a
+switch takes effect immediately, with nothing to invalidate and no reload to trigger.
+Filtering happens *before* grouping, which is what lets an application left with one visible
+item collapse back to a plain row.
 
 The list used to be an inventory inspector: an "Open" button per item, each item's x
 position, a separate section for off-screen ones. That was a second, worse view of what the
