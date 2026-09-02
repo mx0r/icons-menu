@@ -199,6 +199,21 @@ IconsMenu is subject to the same overflow it exists to solve, so:
   the actual guarantee: on a narrow or notched display even the rightmost item can be
   pushed off, and an unreachable IconsMenu would defeat the whole point.
 
+## Launch at login
+
+Settings has an **Open IconsMenu at login** switch. It registers the app itself through
+`SMAppService.mainApp` — no helper bundle, no `LaunchAgents` plist.
+
+macOS keys the registration to the bundle it was made from, which matters more here than
+usual: switch it on for the copy in `/Applications`, because a build in `.build/` registers
+*that* path and quietly stops opening once the next build replaces it.
+
+Turning the entry off in System Settings → General → Login Items leaves the service
+`.requiresApproval` — registered, not running. The switch reports that state and offers a
+link to the pane, rather than flipping back with no explanation. It also re-reads whenever
+the window appears or the app is activated, since nothing notifies an app when its login
+item is changed out from under it.
+
 ## The icon
 
 Drawn in code, in `Sources/Core/IconArtwork.swift` — no image assets in the repo beyond the
@@ -232,7 +247,8 @@ Sources/Core/         AXAttributes      AX wrappers; nil rather than errors
 Sources/IconsMenu/    IconsMenuApp      LSUIElement entry point, permission gate
                       MenuController    the status item and its dropdown
                       GlobalHotkey      Carbon RegisterEventHotKey wrapper
-                      SettingsView      inventory inspector
+                      LaunchAtLogin     SMAppService login item registration
+                      SettingsView      inventory inspector and preferences
 Sources/axprobe/      main              CLI over the same core, for debugging AX
 Sources/iconforge/    main              renders the .icns; run via `make icon`
 ```
@@ -245,5 +261,4 @@ Sources/iconforge/    main              renders the .icns; run via `make icon`
   ⌘-drag events, which is the fragile part of Bartender and Ice and what broke Ice on Tahoe.
   Deliberately skipped: with IconsMenu, an overflowing bar no longer costs you access, which
   removes most of the reason to hide anything.
-- **Launch at login.** Add via `SMAppService.mainApp.register()` if wanted.
 - **Configurable hotkey.** ⌃⌥M is hardcoded.

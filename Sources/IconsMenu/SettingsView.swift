@@ -39,6 +39,7 @@ final class InventoryModel: ObservableObject {
 struct SettingsView: View {
 
     @StateObject private var model = InventoryModel()
+    @StateObject private var launchAtLogin = LaunchAtLogin()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -48,9 +49,16 @@ struct SettingsView: View {
                 permissionNotice
             }
             Divider()
+            preferences
+            Divider()
             footer
         }
         .frame(minWidth: 460, minHeight: 380)
+        // Login Items can be changed from System Settings, and nothing tells us when it is.
+        .onAppear { launchAtLogin.refresh() }
+        .onReceive(
+            NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)
+        ) { _ in launchAtLogin.refresh() }
     }
 
     private var itemList: some View {
@@ -112,6 +120,27 @@ struct SettingsView: View {
         }
         .padding(40)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var preferences: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Toggle(
+                "Open IconsMenu at login",
+                isOn: Binding(get: { launchAtLogin.isEnabled }, set: { launchAtLogin.set($0) })
+            )
+
+            if let notice = launchAtLogin.notice {
+                HStack(spacing: 6) {
+                    Text(notice)
+                    Button("Open Login Items…") { LaunchAtLogin.openSystemSettings() }
+                        .buttonStyle(.link)
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
     }
 
     private var footer: some View {
