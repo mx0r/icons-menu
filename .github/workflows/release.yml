@@ -1,0 +1,123 @@
+name: Release
+
+# Tag a commit and the DMG builds itself:
+#
+#     git tag v1.1 && git push origin v1.1
+#
+# The version comes from the tag, so project.yml does not need bumping. Use the
+# manual trigger to prove the workflow works without minting a real release.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build, without the leading v"
+        required: true
+        default: "0.0.0-test"
+
+permissions:
+  # Needed to create the release and attach the DMG to it.
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Report the toolchain
+        # Printed unconditionally: when this workflow breaks it is almost always
+        # because the runner image moved to a different Xcode, and the log should
+        # say so plainly rather than failing somewhere further down.
+        run: |
+          sw_vers
+          echo "Xcodes on this image:"
+          ls -d /Applications/Xcode*.app 2>/dev/null || echo "  (none beyond the default)"
+          xcodebuild -version
+
+      - name: Require a macOS 14 SDK
+        # The deployment target is macOS 14. An older SDK fails with a wall of
+        # type errors, which is a poor way to learn the image changed — so check
+        # it up front and say what is wrong.
+        run: |
+          sdk=$(xcodebuild -showsdks | awk '/macosx/{print $NF}' | tail -1 | sed 's/macosx//')
+          echo "macOS SDK: $sdk"
+          major=${sdk%%.*}
+          if [ "$major" -lt 14 ]; then
+            echo "::error::This project needs a macOS 14 SDK or newer; the runner has $sdk."
+            echo "Pick a newer Xcode with xcode-select, or pin a runner image that has one."
+            exit 1
+          fi
+
+      - name: Install xcodegen
+        # project.yml is the source of truth; the .xcodeproj is generated and
+        # deliberately not committed.
+        run: brew install xcodegen
+
+      - name: Work out the version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            version="${{ github.event.inputs.version }}"
+          else
+            version="${GITHUB_REF_NAME#v}"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Building $version"
+
+      - name: Build and package
+        # Signing is ad hoc, which needs no secrets — the same thing a local
+        # build produces.
+        env:
+          MARKETING_VERSION: ${{ steps.version.outputs.version }}
+          CURRENT_PROJECT_VERSION: ${{ github.run_number }}
+        run: ./scripts/build-release.sh
+
+      - name: Locate the artefacts
+        id: artefacts
+        run: |
+          dmg=$(find builds -name "*.dmg" -print -quit)
+          [ -n "$dmg" ] || { echo "::error::no DMG was produced"; exit 1; }
+          echo "dmg=$dmg" >> "$GITHUB_OUTPUT"
+          echo "dir=$(dirname "$dmg")" >> "$GITHUB_OUTPUT"
+          shasum -a 256 "$dmg"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: IconsMenu-${{ steps.version.outputs.version }}
+          path: ${{ steps.artefacts.outputs.dir }}
+
+      - name: Publish the release
+        # Only for a real tag. A manual run leaves the DMG as an artefact so the
+        # workflow can be exercised without minting a release.
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          notes=$(mktemp)
+          {
+            echo "IconsMenu ${{ steps.version.outputs.version }}"
+            echo
+            echo "**This build is signed ad hoc, not with an Apple Developer ID.**"
+            echo "macOS will refuse to open it on the first try: right-click the app"
+            echo "in Applications and choose Open, then confirm. Once only."
+            echo
+            echo "IconsMenu needs Accessibility permission and does nothing without it."
+            echo "Because the signature is ad hoc, the grant does not carry over from an"
+            echo "earlier version — remove the old entry in System Settings > Privacy &"
+            echo "Security > Accessibility and let this copy ask again."
+            echo
+            echo '```'
+            cat "${{ steps.artefacts.outputs.dmg }}.sha256"
+            echo '```'
+          } > "$notes"
+
+          gh release create "$GITHUB_REF_NAME" \
+            --title "IconsMenu ${{ steps.version.outputs.version }}" \
+            --notes-file "$notes" \
+            "${{ steps.artefacts.outputs.dmg }}" \
+            "${{ steps.artefacts.outputs.dmg }}.sha256" \
+            "${{ steps.artefacts.outputs.dir }}/Read Me.txt"
