@@ -207,9 +207,10 @@ Icons Menu is subject to the same overflow it exists to solve, so:
   app seeds `0` on first launch and lands as far right as the bar allows, immediately left
   of Control Center. That makes it the last third-party item to ever be pushed off. The
   value is only seeded when absent, so dragging the icon somewhere else sticks.
-- It registers a system-wide hotkey — **⌃⌥M** by default — which pops the menu at the
-  pointer. This is the actual guarantee: on a narrow or notched display even the rightmost
-  item can be pushed off, and an unreachable Icons Menu would defeat the whole point.
+- It registers a system-wide hotkey — **⌃⌥M** by default — which opens the search panel.
+  This is the actual guarantee: on a narrow or notched display even the rightmost item can
+  be pushed off, and an unreachable Icons Menu would defeat the whole point. The panel does
+  not care where the icon is, or whether it is on screen at all.
 
   The combination is recorded in Settings. Carbon has no way to ask whether one is free, so
   the recorder finds out the only way available: it registers the candidate, sees whether
@@ -217,6 +218,44 @@ Icons Menu is subject to the same overflow it exists to solve, so:
   another app already owns is refused with a message rather than accepted into a shortcut
   that silently does nothing. It insists on ⌃, ⌥ or ⌘ — a system-wide ⇧A would eat the
   letter everywhere.
+
+## The search panel
+
+The icon opens the dropdown; the hotkey opens a search field over the same data. Type, and
+it filters **every level at once** — application names, submenu titles and the entries
+themselves — so `kub` reaches Docker Desktop › Kubernetes Context › a cluster without
+descending through any of it. Every whitespace-separated token has to match somewhere, so
+`doc kub` narrows further and the order they were typed in does not matter.
+
+<p align="center">
+  <img src="docs/panel.png" alt="The search panel with nothing typed, listing applications" width="420">
+  <br>
+  <sub>Nothing typed yet: the applications, with what each contributes.</sub>
+</p>
+
+<p align="center">
+  <img src="docs/panel-query.png" alt="The search panel filtered by the query 'docker da', showing two entries from inside Docker Desktop's menu" width="420">
+  <br>
+  <sub><code>docker da</code> — two tokens, matched across the application name and an entry
+  two levels inside its menu. The subtitle is the path the entry came from.</sub>
+</p>
+
+Ranked by where the first token lands: a title that starts with it, then a title containing
+it, then a match in the path. Ties keep bar order, so the list never reshuffles for reasons
+you cannot see.
+
+- **↑↓** move, **⌘↑ ⌘↓** jump to either end, **↩** activate, **esc** close.
+- With nothing typed the panel lists applications. **↩** on one narrows the search to it —
+  a chip in the field, **esc** or backspace to leave — which is how you browse a menu you
+  do not know the contents of. An application with only one entry activates it directly
+  rather than making you press Return twice.
+- Rows that only contain other rows are not listed. Their children already are, with the
+  container's title in their path.
+
+It is a panel rather than a filtered `NSMenu` for two reasons, both of them load bearing:
+`NSMenu` owns its tracking loop and keystrokes go to the menu rather than to us, and
+mutating a menu that is already on screen is what made this app flicker in the first place.
+The panel reads the same cache the dropdown reads, so typing costs no cross-process calls.
 
 ## Settings
 

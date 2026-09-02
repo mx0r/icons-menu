@@ -65,6 +65,17 @@ forget where the user dragged the icon.
   process stalls the scan for seconds.
 - Control Center reports a **zero-size placeholder child per module you have not
   enabled** — filtered out by size, not by name.
+- **`NSRunningApplication.icon` hands back IconServices representations**
+  (`NSISIconImageRep`), rendered lazily out of a shared cache at draw time. On a rotated 1×
+  display some of them drew as horizontal streaks — never all, never the same ones on another
+  screen — while the same representations dumped to PNG were provably correct. `AppIcon` reads
+  the bundle's own `.icns` instead. Never resample an app icon to fit: an `.icns` holds
+  separately drawn artwork per size, and setting a *nominal* size leaves AppKit free to pick
+  the right one. Three fixes that resampled in different ways all failed before that landed.
+- **`defaults write info.hudak.macos.IconsMenu IconDiagnostics -bool true`** makes the search
+  panel write what its rows drew to the Desktop, captured before the window server composites
+  it. Use it when a rendering fault cannot be reproduced offscreen: a clean capture beside a
+  wrong screenshot places the fault outside this app.
 - **Ad-hoc signing revokes the Accessibility grant on every build.** Toggling the
   switch in System Settings does *not* fix it — that re-approves the old signature.
   The entry has to be removed and recreated:

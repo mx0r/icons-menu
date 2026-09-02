@@ -11,6 +11,12 @@ struct HotkeyRecorder: View {
 
     @Binding var shortcut: HotkeyShortcut
 
+    /// Owned by the caller's switch. Taken as a value rather than left to `.disabled` at the
+    /// call site, because being switched off while armed has to *disarm* the recorder: a
+    /// disabled button cannot be pressed to cancel, and the monitor it installed swallows
+    /// every keystroke in the app until something takes it down.
+    var isEnabled: Bool = true
+
     @State private var isRecording = false
     @State private var monitor: Any?
     @State private var problem: String?
@@ -39,6 +45,10 @@ struct HotkeyRecorder: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+        }
+        .disabled(!isEnabled)
+        .onChange(of: isEnabled) { _, enabled in
+            if !enabled { cancel() }
         }
         .onDisappear(perform: cancel)
     }

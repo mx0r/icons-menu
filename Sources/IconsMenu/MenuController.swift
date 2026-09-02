@@ -17,6 +17,12 @@ final class MenuController: NSObject, NSMenuDelegate {
     private let preferences = Preferences.shared
     private var hotkeyObserver: AnyCancellable?
 
+    /// The keyboard route into the same data: the icon opens the dropdown, the hotkey opens
+    /// the search panel. Built lazily so `self` can be captured for the inventory it reads.
+    private lazy var searchPanel = SearchPanelController { [weak self] in
+        self?.cachedInventory ?? Inventory(items: [])
+    }
+
     /// Last completed scan, including every item's full menu tree.
     ///
     /// Everything shown in the dropdown comes from here, so presenting it makes no
@@ -143,14 +149,27 @@ final class MenuController: NSObject, NSMenuDelegate {
 
     /// Being rightmost makes the icon unlikely to be pushed off-screen, but on a narrow or
     /// notched display it is still possible — and an unreachable Icons Menu defeats the
-    /// entire point. The hotkey is the actual guarantee, since it pops the menu at the
-    /// pointer where the icon's position is irrelevant.
+    /// entire point. The hotkey is the actual guarantee, since the search panel it opens has
+    /// nothing to do with where the icon sits.
     private func installHotkey(_ shortcut: HotkeyShortcut) {
         // Dropped before registering: Carbon refuses a duplicate, and re-registering the same
         // combination is the common case when only the label changed.
         hotkey = nil
+
+        guard preferences.isHotkeyEnabled else {
+            statusItem.button?.toolTip = "Icons Menu — reach any menu bar item"
+            return
+        }
+
         hotkey = GlobalHotkey.register(shortcut) { [weak self] in
-            MainActor.assumeIsolated { self?.popUpMenuAtPointer() }
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                // Refreshed as the panel opens rather than while it is up: the scan is a
+                // background pass, so this one shows the current cache and the next one
+                // shows what it found.
+                self.refreshInventoryInBackground()
+                self.searchPanel.toggle()
+            }
         }
 
         // The Settings recorder checks availability before committing, so a failure here means
@@ -162,19 +181,22 @@ final class MenuController: NSObject, NSMenuDelegate {
 
     private func observeHotkeyChanges() {
         // `dropFirst` because `@Published` replays the current value on subscribe, which init
-        // has just registered.
+        // has just registered. The switch and the combination both land here — turning it off
+        // has to actually unregister, or the combination stays claimed from every other app's
+        // point of view.
         hotkeyObserver = preferences.$hotkey
             .dropFirst()
-            .sink { [weak self] shortcut in
-                MainActor.assumeIsolated { self?.installHotkey(shortcut) }
+            .map { _ in () }
+            .merge(with: preferences.$isHotkeyEnabled.dropFirst().map { _ in () })
+            // `@Published` fires in `willSet`, so without hopping a turn the property still
+            // holds the old value when this reads it back.
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.installHotkey(self.preferences.hotkey)
+                }
             }
-    }
-
-    private func popUpMenuAtPointer() {
-        // `popUp` refuses to run while the menu belongs to a status item, so hand it back
-        // in `menuDidClose`.
-        statusItem.menu = nil
-        menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
     }
 
     // MARK: - Menu construction
@@ -191,9 +213,6 @@ final class MenuController: NSObject, NSMenuDelegate {
 
     func menuDidClose(_ menu: NSMenu) {
         guard menu === self.menu else { return }
-
-        // Reclaim the menu after a hotkey-triggered pop-up detached it.
-        if statusItem.menu == nil { statusItem.menu = menu }
 
         // Refreshed here rather than while building, so the scan is nowhere near the
         // tracking loop. Bounced through the next run loop turn because AppKit is still
@@ -347,10 +366,7 @@ final class MenuController: NSObject, NSMenuDelegate {
     /// The owning application's icon, not a picture of the menu bar item itself — which is
     /// what keeps this app clear of needing Screen Recording permission.
     private func icon(forPID pid: pid_t) -> NSImage? {
-        guard let icon = NSRunningApplication(processIdentifier: pid)?.icon else { return nil }
-        let sized = icon.copy() as! NSImage
-        sized.size = NSSize(width: 16, height: 16)
-        return sized
+        AppIcon.forProcess(pid, size: 16)
     }
 
     private func disabledItem(_ title: String) -> NSMenuItem {

@@ -165,7 +165,7 @@ struct SettingsView: View {
         HStack(spacing: Layout.spacing) {
             chevron(for: app)
 
-            if let icon = NSRunningApplication(processIdentifier: app.pid)?.icon {
+            if let icon = AppIcon.forProcess(app.pid, size: Layout.icon) {
                 Image(nsImage: icon)
                     .resizable()
                     .frame(width: Layout.icon, height: Layout.icon)
@@ -261,8 +261,18 @@ struct SettingsView: View {
     private var settings: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                Text("Shortcut")
-                HotkeyRecorder(shortcut: $preferences.hotkey)
+                Toggle("Shortcut", isOn: $preferences.isHotkeyEnabled)
+                HotkeyRecorder(
+                    shortcut: $preferences.hotkey,
+                    isEnabled: preferences.isHotkeyEnabled
+                )
+            }
+
+            if !preferences.isHotkeyEnabled {
+                Text("No system-wide shortcut is registered. The menu bar icon still opens "
+                     + "the menu.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Toggle(

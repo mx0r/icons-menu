@@ -34,7 +34,7 @@
 
   <header class="hero">
     <div class="hero__copy">
-      <p class="eyebrow">macOS 14+ · Apple silicon · v0.5</p>
+      <p class="eyebrow">macOS 14+ · Apple silicon · v0.6</p>
       <h1>Every menu bar item.<br>Even the ones you can’t see.</h1>
       <p class="lede">
         Menu bar utilities have no Dock icon, no main menu and no window to bring forward —
@@ -45,14 +45,14 @@
 
       <div class="actions">
         <a class="btn btn--primary"
-           href="https://github.com/mx0r/icons-menu/releases/download/v0.5/IconsMenu-0.5.dmg">
-          Download 0.5
+           href="https://github.com/mx0r/icons-menu/releases/download/v0.6/IconsMenu-0.6.dmg">
+          Download 0.6
         </a>
         <a class="btn" href="https://github.com/mx0r/icons-menu">View on GitHub</a>
       </div>
 
       <p class="note">
-        IconsMenu-0.5.dmg · 531 KB ·
+        IconsMenu-0.6.dmg ·
         <a href="https://github.com/mx0r/icons-menu/releases">all releases</a>
       </p>
 
@@ -79,8 +79,8 @@
     </div>
     <div class="spec__item">
       <p class="label"><kbd>⌃</kbd><kbd>⌥</kbd><kbd>M</kbd></p>
-      <p>A system-wide shortcut pops the menu at the pointer, so the icon's own position never
-        enters into it. Record a different one in Settings.</p>
+      <p>A system-wide shortcut opens search, so the icon's own position never enters into it.
+        Record a different one in Settings, or switch it off entirely.</p>
     </div>
     <div class="spec__item">
       <p class="label">Hide what you never use</p>
@@ -97,6 +97,32 @@
       <p>Nothing is scanned while the menu is on screen. A background scan keeps the tree
         warm, with every Accessibility message bounded at 100 ms.</p>
     </div>
+  </section>
+
+  <section class="settings">
+    <div class="settings__copy">
+      <p class="eyebrow">Search</p>
+      <h2>One query, every level of every menu.</h2>
+      <p>
+        The shortcut opens a search field rather than the dropdown. Typing filters application
+        names, submenu titles and the entries inside them all at once — <code>docker da</code>
+        finds an entry two levels into Docker Desktop's menu without opening anything on the
+        way there.
+      </p>
+      <p>
+        Every whitespace-separated token has to match somewhere, so a second word narrows and
+        the order does not matter. Arrows move, Return activates, Escape closes. With nothing
+        typed you get the applications, and Return on one narrows the search to it.
+      </p>
+      <p>
+        Nothing is scanned while you type: the panel reads the same warm cache the dropdown
+        does.
+      </p>
+    </div>
+    <figure class="shot shot--panel">
+      <img src="assets/panel-query.png" width="1332" height="974"
+           alt="The search panel filtered by the query 'docker da', showing two entries from inside Docker Desktop's menu">
+    </figure>
   </section>
 
   <section class="settings">
