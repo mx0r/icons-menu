@@ -165,7 +165,7 @@ struct SettingsView: View {
         HStack(spacing: Layout.spacing) {
             chevron(for: app)
 
-            if let icon = NSRunningApplication(processIdentifier: app.pid)?.icon {
+            if let icon = AppIcon.forProcess(app.pid, size: Layout.icon) {
                 Image(nsImage: icon)
                     .resizable()
                     .frame(width: Layout.icon, height: Layout.icon)

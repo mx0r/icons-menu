@@ -366,10 +366,7 @@ final class MenuController: NSObject, NSMenuDelegate {
     /// The owning application's icon, not a picture of the menu bar item itself — which is
     /// what keeps this app clear of needing Screen Recording permission.
     private func icon(forPID pid: pid_t) -> NSImage? {
-        guard let icon = NSRunningApplication(processIdentifier: pid)?.icon else { return nil }
-        let sized = icon.copy() as! NSImage
-        sized.size = NSSize(width: 16, height: 16)
-        return sized
+        AppIcon.forProcess(pid, size: 16)
     }
 
     private func disabledItem(_ title: String) -> NSMenuItem {

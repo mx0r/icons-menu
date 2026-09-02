@@ -411,7 +411,7 @@ private final class SearchRowView: NSTableCellView {
         isEnabled: Bool,
         isSelected: Bool
     ) {
-        icon.image = NSRunningApplication(processIdentifier: pid)?.icon
+        icon.image = AppIcon.forProcess(pid, size: Metrics.icon)
         self.title.stringValue = title
         self.subtitle.stringValue = subtitle ?? ""
         self.subtitle.isHidden = subtitle == nil
