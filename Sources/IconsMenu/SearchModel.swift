@@ -60,11 +60,19 @@ final class SearchModel {
         refilter()
     }
 
-    func move(by offset: Int) {
+    /// Arrows wrap — up from the first row lands on the last — which is the shortest route to
+    /// the end of a list you are looking at the top of. Page jumps clamp instead: wrapping a
+    /// ±8 would skip past whatever it landed near.
+    func move(by offset: Int, wrapping: Bool = false) {
         guard count > 0 else { return }
-        // Clamped rather than wrapped: holding ↓ should come to rest at the end of the list,
-        // not cycle back past the row you were aiming at.
-        selection = min(max(selection + offset, 0), count - 1)
+
+        guard wrapping else {
+            selection = min(max(selection + offset, 0), count - 1)
+            return
+        }
+
+        let next = (selection + offset) % count
+        selection = next < 0 ? next + count : next
     }
 
     func moveToEdge(_ direction: Int) {

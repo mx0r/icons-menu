@@ -173,11 +173,11 @@ final class SearchPanelController {
 
         switch Int(event.keyCode) {
         case kVK_DownArrow:
-            if command { model.moveToEdge(1) } else { model.move(by: 1) }
+            if command { model.moveToEdge(1) } else { model.move(by: 1, wrapping: true) }
             return true
 
         case kVK_UpArrow:
-            if command { model.moveToEdge(-1) } else { model.move(by: -1) }
+            if command { model.moveToEdge(-1) } else { model.move(by: -1, wrapping: true) }
             return true
 
         case kVK_PageDown:

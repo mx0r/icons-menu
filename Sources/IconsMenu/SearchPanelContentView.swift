@@ -76,7 +76,8 @@ final class SearchPanelContentView: NSVisualEffectView {
         field.drawsBackground = false
         field.focusRingType = .none
         field.font = .systemFont(ofSize: 19, weight: .regular)
-        field.placeholderString = "Search every menu bar item"
+        // Not "every": what is searched is what Settings has left switched on.
+        field.placeholderString = "Search menu bar items"
         field.delegate = self
         // Return is handled by the panel's key monitor, well before the field's action would
         // fire; this only stops AppKit beeping if it ever gets that far.
@@ -213,7 +214,7 @@ final class SearchPanelContentView: NSVisualEffectView {
             scopeChip.isHidden = true
             chipGap.constant = 0
             fieldGap.constant = Metrics.gap
-            field.placeholderString = "Search every menu bar item"
+            field.placeholderString = "Search menu bar items"
         }
 
         table.reloadData()
@@ -304,6 +305,20 @@ private final class SearchRowView: NSTableCellView {
     private let subtitle = NSTextField(labelWithString: "")
     private let trailing = NSTextField(labelWithString: "")
 
+    /// Laid out by hand, in `layout()`, and flipped so y grows downward.
+    ///
+    /// The stack views this replaces looked identical until the table started recycling rows:
+    /// a row that had had a subtitle kept the space for it after the subtitle was hidden, so
+    /// everything without one sat visibly high from the first scroll onwards. Two frames
+    /// computed from the row's own height cannot drift out of step with the content.
+    override var isFlipped: Bool { true }
+
+    private enum Metrics {
+        static let inset: CGFloat = 14
+        static let icon: CGFloat = 20
+        static let gap: CGFloat = 9
+    }
+
     init() {
         super.init(frame: .zero)
         identifier = SearchRowView.identifier
@@ -316,54 +331,67 @@ private final class SearchRowView: NSTableCellView {
         trailing.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
         trailing.textColor = .tertiaryLabelColor
 
-        let text = NSStackView(views: [title, subtitle])
-        text.orientation = .vertical
-        text.alignment = .leading
-        text.spacing = 0
-
-        // An empty view with the weakest hugging in the stack is what pushes the trailing
-        // label to the right edge; without the priorities it collapses to nothing.
-        let spacer = NSView()
-        spacer.setContentHuggingPriority(NSLayoutConstraint.Priority(1), for: .horizontal)
-        spacer.setContentCompressionResistancePriority(
-            NSLayoutConstraint.Priority(1), for: .horizontal
-        )
-
-        let row = NSStackView(views: [icon, text, spacer, trailing])
-        row.orientation = .horizontal
-        row.alignment = .centerY
-        row.spacing = 9
-        // 14 on the left, matching the magnifier above, so the icon column and the query line
-        // up down the whole panel.
-        row.edgeInsets = NSEdgeInsets(top: 0, left: 14, bottom: 0, right: 14)
-
         highlight.wantsLayer = true
         highlight.layer?.cornerRadius = 7
         highlight.layer?.cornerCurve = .continuous
         highlight.isHidden = true
 
-        for view in [highlight, row] {
-            view.translatesAutoresizingMaskIntoConstraints = false
+        for view in [highlight, icon, title, subtitle, trailing] {
             addSubview(view)
         }
-
-        NSLayoutConstraint.activate([
-            icon.widthAnchor.constraint(equalToConstant: 20),
-            icon.heightAnchor.constraint(equalToConstant: 20),
-            row.leadingAnchor.constraint(equalTo: leadingAnchor),
-            row.trailingAnchor.constraint(equalTo: trailingAnchor),
-            row.topAnchor.constraint(equalTo: topAnchor),
-            row.bottomAnchor.constraint(equalTo: bottomAnchor),
-
-            highlight.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6),
-            highlight.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
-            highlight.topAnchor.constraint(equalTo: topAnchor, constant: 1),
-            highlight.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -1),
-        ])
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("not used") }
+
+    override func layout() {
+        super.layout()
+
+        highlight.frame = bounds.insetBy(dx: 6, dy: 1)
+        icon.frame = NSRect(
+            x: Metrics.inset,
+            y: ((bounds.height - Metrics.icon) / 2).rounded(),
+            width: Metrics.icon,
+            height: Metrics.icon
+        )
+
+        let textX = Metrics.inset + Metrics.icon + Metrics.gap
+        var textRight = bounds.maxX - Metrics.inset
+
+        if !trailing.isHidden {
+            let size = trailing.intrinsicContentSize
+            trailing.frame = NSRect(
+                x: bounds.maxX - Metrics.inset - size.width,
+                y: ((bounds.height - size.height) / 2).rounded(),
+                width: size.width,
+                height: size.height
+            )
+            textRight = trailing.frame.minX - Metrics.gap
+        }
+
+        let width = max(0, textRight - textX)
+        let titleHeight = ceil(title.intrinsicContentSize.height)
+
+        guard !subtitle.isHidden else {
+            title.frame = NSRect(
+                x: textX,
+                y: ((bounds.height - titleHeight) / 2).rounded(),
+                width: width,
+                height: titleHeight
+            )
+            return
+        }
+
+        let subtitleHeight = ceil(subtitle.intrinsicContentSize.height)
+        let top = ((bounds.height - titleHeight - subtitleHeight) / 2).rounded()
+        title.frame = NSRect(x: textX, y: top, width: width, height: titleHeight)
+        subtitle.frame = NSRect(
+            x: textX,
+            y: top + titleHeight,
+            width: width,
+            height: subtitleHeight
+        )
+    }
 
     func show(
         pid: pid_t,
@@ -384,5 +412,8 @@ private final class SearchRowView: NSTableCellView {
         highlight.isHidden = !isSelected
         highlight.layer?.backgroundColor =
             NSColor.controlAccentColor.withAlphaComponent(0.22).cgColor
+
+        // A recycled row arrives with the previous row's geometry.
+        needsLayout = true
     }
 }
