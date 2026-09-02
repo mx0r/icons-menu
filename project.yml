@@ -9,7 +9,7 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "0.5"
+    MARKETING_VERSION: "0.6"
     CURRENT_PROJECT_VERSION: "1"
     # Ad-hoc signing: there is no Developer ID on this machine. Note that the
     # Accessibility grant is keyed to the code signature, so it must be re-granted

@@ -227,6 +227,19 @@ themselves — so `kub` reaches Docker Desktop › Kubernetes Context › a clus
 descending through any of it. Every whitespace-separated token has to match somewhere, so
 `doc kub` narrows further and the order they were typed in does not matter.
 
+<p align="center">
+  <img src="docs/panel.png" alt="The search panel with nothing typed, listing applications" width="420">
+  <br>
+  <sub>Nothing typed yet: the applications, with what each contributes.</sub>
+</p>
+
+<p align="center">
+  <img src="docs/panel-query.png" alt="The search panel filtered by the query 'docker da', showing two entries from inside Docker Desktop's menu" width="420">
+  <br>
+  <sub><code>docker da</code> — two tokens, matched across the application name and an entry
+  two levels inside its menu. The subtitle is the path the entry came from.</sub>
+</p>
+
 Ranked by where the first token lands: a title that starts with it, then a title containing
 it, then a match in the path. Ties keep bar order, so the list never reshuffles for reasons
 you cannot see.
