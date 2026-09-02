@@ -109,7 +109,7 @@ struct SettingsView: View {
                 .foregroundStyle(.secondary)
             Text("Accessibility access required")
                 .font(.headline)
-            Text("IconsMenu reads and presses menu bar items through the Accessibility API. "
+            Text("Icons Menu reads and presses menu bar items through the Accessibility API. "
                  + "Without this permission it cannot see any of them.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
@@ -125,7 +125,7 @@ struct SettingsView: View {
     private var preferences: some View {
         VStack(alignment: .leading, spacing: 4) {
             Toggle(
-                "Open IconsMenu at login",
+                "Open Icons Menu at login",
                 isOn: Binding(get: { launchAtLogin.isEnabled }, set: { launchAtLogin.set($0) })
             )
 
@@ -176,7 +176,7 @@ final class SettingsWindowController: NSWindowController {
             backing: .buffered,
             defer: false
         )
-        window.title = "IconsMenu"
+        window.title = "Icons Menu"
         window.contentView = NSHostingView(rootView: SettingsView())
         window.center()
         window.isReleasedWhenClosed = false

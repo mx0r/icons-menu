@@ -49,7 +49,7 @@ final class MenuController: NSObject, NSMenuDelegate {
         statusItem.autosaveName = MenuController.autosaveName
         statusItem.button?.image = IconArtwork.menuBarImage()
         statusItem.button?.toolTip =
-            "IconsMenu — reach any menu bar item (\(GlobalHotkey.defaultShortcutDescription))"
+            "Icons Menu — reach any menu bar item (\(GlobalHotkey.defaultShortcutDescription))"
 
         menu.delegate = self
         statusItem.menu = menu
@@ -332,7 +332,7 @@ final class MenuController: NSObject, NSMenuDelegate {
     }
 
     private func addPermissionPrompt(to menu: NSMenu) {
-        menu.addItem(disabledItem("IconsMenu needs Accessibility access"))
+        menu.addItem(disabledItem("Icons Menu needs Accessibility access"))
 
         let grant = NSMenuItem(
             title: "Open Privacy & Security…",
@@ -346,7 +346,7 @@ final class MenuController: NSObject, NSMenuDelegate {
     private func addFooter(to menu: NSMenu) {
         menu.addItem(.separator())
 
-        let about = NSMenuItem(title: "About IconsMenu", action: #selector(showAbout), keyEquivalent: "")
+        let about = NSMenuItem(title: "About Icons Menu", action: #selector(showAbout), keyEquivalent: "")
         about.target = self
         menu.addItem(about)
 
@@ -354,7 +354,11 @@ final class MenuController: NSObject, NSMenuDelegate {
         settings.target = self
         menu.addItem(settings)
 
-        let quit = NSMenuItem(title: "Quit IconsMenu", action: #selector(quit), keyEquivalent: "q")
+        // Quit sits on its own, the way every other menu bar app separates it — it is the one
+        // row here with a consequence.
+        menu.addItem(.separator())
+
+        let quit = NSMenuItem(title: "Quit Icons Menu", action: #selector(quit), keyEquivalent: "q")
         quit.target = self
         menu.addItem(quit)
     }

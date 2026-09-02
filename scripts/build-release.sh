@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Build, sign and package IconsMenu as a DMG.
+# Build, sign and package Icons Menu as a DMG.
 #
 #   ./scripts/build-release.sh
 #
@@ -72,11 +72,13 @@ APP_NAME=$(basename "$APP" .app)
 VERSION=$(defaults read "$APP/Contents/Info" CFBundleShortVersionString)
 BUILD=$(defaults read "$APP/Contents/Info" CFBundleVersion)
 BUNDLE_ID=$(defaults read "$APP/Contents/Info" CFBundleIdentifier)
+# The bundle on disk is IconsMenu.app; everything a user reads calls it "Icons Menu".
+DISPLAY_NAME=$(defaults read "$APP/Contents/Info" CFBundleName)
 DATE=$(date +%Y-%m-%d)
 OUT="$REPO/builds/$DATE-$VERSION"
 DMG="$OUT/$APP_NAME-$VERSION.dmg"
 
-info "$APP_NAME $VERSION (build $BUILD), $BUNDLE_ID"
+info "$DISPLAY_NAME $VERSION (build $BUILD), $BUNDLE_ID"
 
 # --- stage ------------------------------------------------------------------
 
@@ -119,7 +121,7 @@ codesign --verify --strict --verbose=1 "$STAGE/$APP_NAME.app" \
 # --- readme for whoever installs it -----------------------------------------
 
 cat > "$STAGE/Read Me.txt" <<EOF
-$APP_NAME $VERSION (build $BUILD)
+$DISPLAY_NAME $VERSION (build $BUILD)
 $(date '+%-d %B %Y')
 
 Reaches every menu bar item on the system from one dropdown — including the ones
@@ -139,7 +141,7 @@ FIRST LAUNCH
 ACCESSIBILITY PERMISSION
   Required, and the app is genuinely useless without it: every application
   reports an empty extras menu bar to an untrusted process, so the dropdown
-  would simply be blank. $APP_NAME asks on first launch, and says so in the
+  would simply be blank. $DISPLAY_NAME asks on first launch, and says so in the
   menu until it is granted.
 
   System Settings > Privacy & Security > Accessibility, if you miss the prompt.
@@ -151,7 +153,7 @@ ACCESSIBILITY PERMISSION
       tccutil reset Accessibility $BUNDLE_ID
 
 USING IT
-  Click the $APP_NAME icon, or press ⌃⌥M anywhere to pop the menu at the
+  Click the $DISPLAY_NAME icon, or press ⌃⌥M anywhere to pop the menu at the
   pointer. The hotkey is the reliable route: it does not care where the icon is,
   or whether it is on screen at all.
 
@@ -159,7 +161,7 @@ USING IT
   can be mirrored opens it as a submenu, exactly as the app itself offers it; an
   app without one is a single click that presses the item.
 
-  On first launch $APP_NAME parks itself as far right as the bar allows, so it
+  On first launch $DISPLAY_NAME parks itself as far right as the bar allows, so it
   is the last third-party item macOS pushes off. Drag it elsewhere and that
   choice sticks.
 
@@ -173,7 +175,7 @@ EOF
 
 info "Building DMG"
 hdiutil create \
-  -volname "$APP_NAME $VERSION" \
+  -volname "$DISPLAY_NAME $VERSION" \
   -srcfolder "$STAGE" \
   -fs HFS+ \
   -format UDZO \

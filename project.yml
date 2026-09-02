@@ -39,8 +39,10 @@ targets:
     info:
       path: Sources/IconsMenu/Info.plist
       properties:
-        CFBundleName: IconsMenu
-        CFBundleDisplayName: IconsMenu
+        # The bundle is IconsMenu.app (PRODUCT_NAME), but everything a user reads —
+        # the About panel, Login Items, the Accessibility list — comes from these.
+        CFBundleName: Icons Menu
+        CFBundleDisplayName: Icons Menu
         CFBundleIconFile: AppIcon
         # The About panel reads all three, so they follow the project rather than
         # xcodegen's 1.0/1 defaults.

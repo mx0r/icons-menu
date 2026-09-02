@@ -1,6 +1,6 @@
-# IconsMenu
+# Icons Menu
 
-<img src="docs/icon.png" alt="IconsMenu icon" width="120" align="right">
+<img src="docs/icon.png" alt="Icons Menu icon" width="120" align="right">
 
 A menu bar app that makes every *other* menu bar item reachable, whether or not you can see
 it.
@@ -11,12 +11,12 @@ overflows — and with ~20 items it does, especially on a notched display — ma
 parks the surplus off-screen and those apps become unreachable. Docker Desktop is the
 canonical example.
 
-IconsMenu adds one item to the bar whose dropdown lists every menu bar item on the system by
+Icons Menu adds one item to the bar whose dropdown lists every menu bar item on the system by
 application name, and reaches them through the Accessibility API rather than by clicking, so
 their position on screen stops mattering.
 
 <p align="center">
-  <img src="docs/screenshot.png" alt="The IconsMenu dropdown, listing every menu bar item on the system by application name" width="340">
+  <img src="docs/screenshot.png" alt="The Icons Menu dropdown, listing every menu bar item on the system by application name" width="340">
 </p>
 
 Rows with a chevron open the application's own menu, mirrored:
@@ -70,7 +70,7 @@ make icon      # redraw Resources/AppIcon.icns (only when the artwork changes)
 
 **Accessibility permission is required**, and the app is useless without it — every app
 reports an empty extras menu bar to an untrusted process, so the dropdown would simply be
-blank. IconsMenu prompts on first launch and explains itself in the menu until granted.
+blank. Icons Menu prompts on first launch and explains itself in the menu until granted.
 
 Note that the project signs ad-hoc, because there is no Developer ID on the development
 machine. macOS keys the Accessibility grant to the code signature, so **every rebuild needs
@@ -188,7 +188,7 @@ may lag a scan. A correct menu that occasionally lags beats a fresh one that dis
 
 ## Staying reachable
 
-IconsMenu is subject to the same overflow it exists to solve, so:
+Icons Menu is subject to the same overflow it exists to solve, so:
 
 - It **pins itself rightmost**. `NSStatusItem Preferred Position` is a distance from a fixed
   right-hand anchor — measured across running items, `x + position` is constant — so the
@@ -197,11 +197,11 @@ IconsMenu is subject to the same overflow it exists to solve, so:
   value is only seeded when absent, so dragging the icon somewhere else sticks.
 - It registers **⌃⌥M** as a system-wide hotkey, which pops the menu at the pointer. This is
   the actual guarantee: on a narrow or notched display even the rightmost item can be
-  pushed off, and an unreachable IconsMenu would defeat the whole point.
+  pushed off, and an unreachable Icons Menu would defeat the whole point.
 
 ## Launch at login
 
-Settings has an **Open IconsMenu at login** switch. It registers the app itself through
+Settings has an **Open Icons Menu at login** switch. It registers the app itself through
 `SMAppService.mainApp` — no helper bundle, no `LaunchAgents` plist.
 
 macOS keys the registration to the bundle it was made from, which matters more here than
@@ -259,6 +259,6 @@ Sources/iconforge/    main              renders the .icns; run via `make icon`
   ~10,000pt, pushing everything to its left off-screen — and it hides a *contiguous run*,
   not an arbitrary selection. Hiding a specific set means reordering the bar with synthesised
   ⌘-drag events, which is the fragile part of Bartender and Ice and what broke Ice on Tahoe.
-  Deliberately skipped: with IconsMenu, an overflowing bar no longer costs you access, which
+  Deliberately skipped: with Icons Menu, an overflowing bar no longer costs you access, which
   removes most of the reason to hide anything.
 - **Configurable hotkey.** ⌃⌥M is hardcoded.

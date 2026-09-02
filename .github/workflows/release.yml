@@ -99,13 +99,13 @@ jobs:
         run: |
           notes=$(mktemp)
           {
-            echo "IconsMenu ${{ steps.version.outputs.version }}"
+            echo "Icons Menu ${{ steps.version.outputs.version }}"
             echo
             echo "**This build is signed ad hoc, not with an Apple Developer ID.**"
             echo "macOS will refuse to open it on the first try: right-click the app"
             echo "in Applications and choose Open, then confirm. Once only."
             echo
-            echo "IconsMenu needs Accessibility permission and does nothing without it."
+            echo "Icons Menu needs Accessibility permission and does nothing without it."
             echo "Because the signature is ad hoc, the grant does not carry over from an"
             echo "earlier version — remove the old entry in System Settings > Privacy &"
             echo "Security > Accessibility and let this copy ask again."
@@ -116,7 +116,7 @@ jobs:
           } > "$notes"
 
           gh release create "$GITHUB_REF_NAME" \
-            --title "IconsMenu ${{ steps.version.outputs.version }}" \
+            --title "Icons Menu ${{ steps.version.outputs.version }}" \
             --notes-file "$notes" \
             "${{ steps.artefacts.outputs.dmg }}" \
             "${{ steps.artefacts.outputs.dmg }}.sha256" \
