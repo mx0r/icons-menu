@@ -1,0 +1,279 @@
+/*
+  Icons Menu — landing page.
+  Palette and type come from the app's own surroundings: macOS chrome greys, the system blue
+  of a switch, SF for text and SF Mono wherever the content is machine-readable (shortcuts,
+  step numbers, labels). No web fonts, no scripts, no third-party requests.
+*/
+
+:root {
+  --paper: #f4f4f6;
+  --card: #ffffff;
+  --bar: #17181c;
+  --bar-text: #d8dae0;
+  --text: #15161a;
+  --muted: #6a6e77;
+  --line: rgba(16, 17, 20, 0.11);
+  --blue: #0a63f0;
+  --radius: 14px;
+
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  --page: 1080px;
+  --section: clamp(4rem, 9vw, 7rem);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #0b0c0f;
+    --card: #131418;
+    --bar: #1c1d22;
+    --text: #edeef1;
+    --muted: #969aa3;
+    --line: rgba(255, 255, 255, 0.13);
+    --blue: #5b9dff;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--text);
+  font: 400 17px/1.62 var(--sans);
+  letter-spacing: -0.011em;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: inherit; text-decoration-color: var(--line); text-underline-offset: 3px; }
+a:hover { text-decoration-color: currentColor; }
+
+:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+img { max-width: 100%; height: auto; display: block; }
+
+h1, h2 { letter-spacing: -0.033em; font-weight: 680; margin: 0; }
+h1 { font-size: clamp(2.3rem, 5.6vw, 3.7rem); line-height: 1.06; }
+h2 { font-size: clamp(1.5rem, 2.8vw, 2rem); line-height: 1.16; }
+p { margin: 0 0 1rem; }
+
+.eyebrow,
+.label {
+  font: 500 11px/1.4 var(--mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 0.75rem;
+}
+
+.note { font-size: 13px; color: var(--muted); }
+
+/* --- the strip ----------------------------------------------------------- */
+
+.bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  height: 30px;
+  padding: 0 14px;
+  background: var(--bar);
+  color: var(--bar-text);
+  font-size: 12px;
+  overflow: hidden;
+}
+
+.bar::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 148px;
+  height: 19px;
+  background: var(--bar);
+  border-radius: 0 0 11px 11px;
+}
+
+.bar__title { font-weight: 590; white-space: nowrap; }
+
+/* Right-aligned and clipped, like the real thing: the leftmost extras are the ones that go. */
+.bar__extras {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 17px;
+  min-width: 0;
+  overflow: hidden;
+  opacity: 0.62;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 42px);
+  mask-image: linear-gradient(to right, transparent, #000 42px);
+}
+
+.bar__extras > span { flex: none; font-size: 13px; line-height: 1; }
+
+/* The app pins itself rightmost, and is the one item that never fades out. */
+.bar__self { display: flex; opacity: 1; color: #fff; }
+
+/* --- hero ---------------------------------------------------------------- */
+
+main { max-width: var(--page); margin: 0 auto; padding: 0 clamp(1.25rem, 5vw, 2.5rem); }
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  gap: clamp(2rem, 5vw, 4rem);
+  align-items: center;
+  padding: clamp(3.5rem, 8vw, 6rem) 0 var(--section);
+}
+
+.lede { font-size: 19px; color: var(--muted); max-width: 46ch; margin: 1.4rem 0 0; }
+
+.actions { display: flex; flex-wrap: wrap; gap: 0.7rem; margin: 2rem 0 0.9rem; }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  height: 42px;
+  padding: 0 1.15rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  font-size: 15px;
+  font-weight: 550;
+  text-decoration: none;
+  transition: transform 0.12s ease, border-color 0.12s ease;
+}
+
+.btn:hover { transform: translateY(-1px); border-color: var(--muted); }
+
+.btn--primary {
+  background: var(--blue);
+  border-color: transparent;
+  color: #fff;
+}
+
+.btn--primary:hover { border-color: transparent; }
+
+.demo {
+  font: 400 13px/1.5 var(--mono);
+  letter-spacing: -0.01em;
+  color: var(--muted);
+  border-left: 2px solid var(--line);
+  padding-left: 0.85rem;
+  margin: 1.8rem 0 0;
+  max-width: 40ch;
+}
+
+.shot img {
+  border-radius: var(--radius);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), 0 18px 44px -20px rgba(0, 0, 0, 0.45);
+}
+
+.shot { margin: 0; }
+.shot--menu img { margin-inline: auto; max-width: 300px; }
+
+/* --- spec sheet ---------------------------------------------------------- */
+
+.spec {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: clamp(1.75rem, 4vw, 3rem);
+  padding: var(--section) 0;
+  border-top: 1px solid var(--line);
+}
+
+.spec__item p:last-child { margin: 0; color: var(--muted); font-size: 15.5px; }
+
+kbd {
+  display: inline-block;
+  min-width: 20px;
+  padding: 1px 5px;
+  margin-right: 3px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--card);
+  color: var(--text);
+  font: 500 11px/1.5 var(--mono);
+  text-align: center;
+  letter-spacing: 0;
+}
+
+/* --- settings ------------------------------------------------------------ */
+
+.settings {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr);
+  gap: clamp(2rem, 5vw, 4rem);
+  align-items: start;
+  padding: var(--section) 0;
+  border-top: 1px solid var(--line);
+}
+
+.settings__copy p:not(.eyebrow) { color: var(--muted); max-width: 52ch; }
+.settings__copy h2 { margin-bottom: 1.1rem; }
+.settings__copy strong { color: var(--text); font-weight: 590; }
+
+/* Cropped to the top rather than scaled to fit: the window is twice as tall as it is wide,
+   and the part worth showing is the expanded application. */
+.shot--settings img {
+  max-height: 460px;
+  object-fit: cover;
+  object-position: top;
+  width: 100%;
+  -webkit-mask-image: linear-gradient(to bottom, #000 78%, transparent);
+  mask-image: linear-gradient(to bottom, #000 78%, transparent);
+}
+
+/* --- install ------------------------------------------------------------- */
+
+.install { padding: var(--section) 0; border-top: 1px solid var(--line); }
+.install h2 { margin-bottom: 2.25rem; }
+
+.steps {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: clamp(1.5rem, 3.5vw, 2.5rem);
+  margin: 0;
+  padding: 0;
+}
+
+.steps li { border-top: 1px solid var(--line); padding-top: 1rem; }
+.steps p:last-child { margin: 0; color: var(--muted); font-size: 15.5px; }
+
+/* --- footer -------------------------------------------------------------- */
+
+.foot {
+  max-width: var(--page);
+  margin: 0 auto;
+  padding: 2rem clamp(1.25rem, 5vw, 2.5rem) 3.5rem;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+}
+
+.foot p { margin: 0 0 0.4rem; }
+
+/* --- narrow -------------------------------------------------------------- */
+
+@media (max-width: 760px) {
+  .hero,
+  .settings { grid-template-columns: minmax(0, 1fr); }
+
+  .hero { padding-top: 2.5rem; }
+  .shot--menu img { max-width: 260px; }
+  .bar::after { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}

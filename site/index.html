@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Icons Menu — every menu bar item, even the ones you can't see</title>
+<meta name="description" content="A macOS menu bar app that lists every other menu bar item in one dropdown and opens it through the Accessibility API, so an overflowing bar stops costing you access.">
+<link rel="icon" href="assets/icon.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!--
+  The strip is the page's thesis, not decoration: it is right-aligned and clipped, exactly
+  like the real menu bar, so narrowing the window pushes icons off the left edge. That is the
+  problem this app solves, demonstrated by the page itself.
+-->
+<div class="bar" role="img" aria-label="A mock macOS menu bar whose left-hand icons are cut off">
+  <span class="bar__title">Icons Menu</span>
+  <div class="bar__extras" aria-hidden="true">
+    <span>◐</span><span>⇄</span><span>✱</span><span>⌗</span><span>⏱</span><span>▤</span>
+    <span>⚡</span><span>☁</span><span>⏻</span><span>⌘</span><span>◑</span><span>⚙</span>
+    <span class="bar__self">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <rect x="1.5" y="2.5" width="13" height="5" rx="1.6" fill="currentColor"/>
+        <path d="M4.5 10.5 8 13.5l3.5-3" stroke="currentColor" stroke-width="1.6"
+              stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </span>
+  </div>
+</div>
+
+<main>
+
+  <header class="hero">
+    <div class="hero__copy">
+      <p class="eyebrow">macOS 14+ · Apple silicon · v0.5</p>
+      <h1>Every menu bar item.<br>Even the ones you can’t see.</h1>
+      <p class="lede">
+        Menu bar utilities have no Dock icon, no main menu and no window to bring forward —
+        their status item is the only way in. Once the bar overflows, macOS parks the surplus
+        off-screen and those apps go quiet. Icons Menu lists them all in one dropdown and
+        reaches them through the Accessibility API, so where an icon sits stops mattering.
+      </p>
+
+      <div class="actions">
+        <a class="btn btn--primary"
+           href="https://github.com/mx0r/icons-menu/releases/download/v0.5/IconsMenu-0.5.dmg">
+          Download 0.5
+        </a>
+        <a class="btn" href="https://github.com/mx0r/icons-menu">View on GitHub</a>
+      </div>
+
+      <p class="note">
+        IconsMenu-0.5.dmg · 531 KB ·
+        <a href="https://github.com/mx0r/icons-menu/releases">all releases</a>
+      </p>
+
+      <p class="demo">Narrow this window: the strip above loses icons from the left, the same
+        way your bar does.</p>
+    </div>
+
+    <figure class="shot shot--menu">
+      <img src="assets/menu.png" width="446" height="958"
+           alt="The Icons Menu dropdown listing menu bar items by application name">
+    </figure>
+  </header>
+
+  <section class="spec" aria-label="What it does">
+    <div class="spec__item">
+      <p class="label">One row per application</p>
+      <p>Alphabetical, grouped the way the bar is owned. Control Center's six items collapse
+        into one submenu instead of filling a third of the dropdown.</p>
+    </div>
+    <div class="spec__item">
+      <p class="label">Menus mirrored, not clicked</p>
+      <p>A row with a chevron opens that application's own menu, read straight from it. No
+        rows invented here, no flash of the real icon opening.</p>
+    </div>
+    <div class="spec__item">
+      <p class="label"><kbd>⌃</kbd><kbd>⌥</kbd><kbd>M</kbd></p>
+      <p>A system-wide shortcut pops the menu at the pointer, so the icon's own position never
+        enters into it. Record a different one in Settings.</p>
+    </div>
+    <div class="spec__item">
+      <p class="label">Hide what you never use</p>
+      <p>Switch off a whole application, or one item inside it. The menu is rebuilt on every
+        open, so a switch takes effect immediately.</p>
+    </div>
+    <div class="spec__item">
+      <p class="label">No screen recording</p>
+      <p>Rows show the owning app's icon rather than a picture of the menu bar, which is what
+        keeps this clear of asking for screen capture.</p>
+    </div>
+    <div class="spec__item">
+      <p class="label">Opens in ~110 ms</p>
+      <p>Nothing is scanned while the menu is on screen. A background scan keeps the tree
+        warm, with every Accessibility message bounded at 100 ms.</p>
+    </div>
+  </section>
+
+  <section class="settings">
+    <div class="settings__copy">
+      <p class="eyebrow">Settings</p>
+      <h2>A list of what's up there, and a switch for each.</h2>
+      <p>
+        One row per application. An app contributing more than one item expands, with a switch
+        per item inside — one switch for all of Control Center, or a way to drop just the two
+        you never open.
+      </p>
+      <p>
+        Applications are remembered by bundle ID; items by their ordinal within the app, which
+        is the only identity most of them have. Hiding an app disables its item switches
+        rather than clearing them, so switching it back on restores what you had.
+      </p>
+      <p>
+        The footer counts what is hidden and offers <strong>Show all</strong> — the way back
+        for anything whose application has since quit.
+      </p>
+    </div>
+    <figure class="shot shot--settings">
+      <img src="assets/settings.png" width="1144" height="2208"
+           alt="The Icons Menu settings window, with Control Center expanded to a switch per item">
+    </figure>
+  </section>
+
+  <section class="install">
+    <h2>Getting it running</h2>
+    <ol class="steps">
+      <li>
+        <p class="label">01 · Install</p>
+        <p>Open the DMG and drag Icons Menu to Applications.</p>
+      </li>
+      <li>
+        <p class="label">02 · Open it once by hand</p>
+        <p>The build is signed ad hoc rather than with an Apple Developer ID, so macOS refuses
+          the first launch. Right-click it in Applications, choose Open, confirm. Once only.</p>
+      </li>
+      <li>
+        <p class="label">03 · Grant Accessibility</p>
+        <p>Icons Menu asks on first launch. Without it the dropdown is blank — every
+          application reports an empty menu bar to an untrusted process.</p>
+      </li>
+    </ol>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <p>
+    <a href="https://github.com/mx0r/icons-menu">Source</a> ·
+    <a href="https://github.com/mx0r/icons-menu/releases">Releases</a> ·
+    <a href="https://github.com/mx0r/icons-menu#how-it-works">How it works</a>
+  </p>
+  <p class="note">Made by Miro Hudak. With help from Claude.</p>
+</footer>
+
+</body>
+</html>

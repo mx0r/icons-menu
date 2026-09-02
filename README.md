@@ -119,6 +119,13 @@ Accessibility grant has to be given again after installing it.
 The workflow has a manual trigger (`workflow_dispatch`) so it can be exercised without
 minting a release: it leaves the DMG as a build artefact instead.
 
+## Site
+
+`site/` is a landing page for the app — one HTML file, one stylesheet, three images, no
+scripts and no third-party requests. Open `site/index.html` to see it, or serve the folder
+from GitHub Pages. The download button points at the latest tagged DMG, so it needs updating
+when a release goes out.
+
 ## How it works
 
 Three mechanisms, in order of preference:
