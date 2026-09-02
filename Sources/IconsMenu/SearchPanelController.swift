@@ -27,6 +27,12 @@ final class SearchPanelController {
     /// True for a moment after opening, while activation settles. See `observeDismissal`.
     private var isSettling = false
 
+    /// Held so it can be cancelled: a close and reopen inside the settling window would
+    /// otherwise have the first open's timer end the second one's grace period.
+    private var settleWork: DispatchWorkItem?
+
+    private var keyWindowObserver: NSObjectProtocol?
+
     /// Whether opening the panel had to bring the app forward, and so whether closing it
     /// should hand the front back.
     private var didActivate = false
@@ -38,9 +44,10 @@ final class SearchPanelController {
     deinit {
         if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
         if let outsideClickMonitor { NSEvent.removeMonitor(outsideClickMonitor) }
-        if let deactivationObserver {
-            NotificationCenter.default.removeObserver(deactivationObserver)
+        for observer in [deactivationObserver, keyWindowObserver].compactMap({ $0 }) {
+            NotificationCenter.default.removeObserver(observer)
         }
+        settleWork?.cancel()
     }
 
     var isVisible: Bool { panel?.isVisible ?? false }
@@ -50,8 +57,9 @@ final class SearchPanelController {
     }
 
     func show() {
-        model.reset()
-        model.reload()
+        // One pass: clearing the query and scope and *then* rebuilding would filter the
+        // previous session's rows twice on the way, against applications that may have quit.
+        model.prepare()
 
         // Rebuilt every time rather than kept around: it costs a few milliseconds and it is
         // the reliable way to have the text field come up focused and empty.
@@ -67,26 +75,35 @@ final class SearchPanelController {
         // activating, but only when the *user* clicks it; ordering one front from a hotkey is
         // not that. Typing has to work, so the app comes forward, and `hide` hands the front
         // back afterwards.
+        // Only counts as ours to give back if we were not already frontmost — otherwise
+        // closing the panel would push aside a window of ours that was already in use, the
+        // Settings window being the obvious one.
+        didActivate = !NSApp.isActive
         NSApp.activate(ignoringOtherApps: true)
-        didActivate = true
         panel.makeKeyAndOrderFront(nil)
 
         // Activation is not finished when it returns. Re-asserted a turn later, together with
         // the focus: a field made first responder while the app is still coming forward ends
         // up with no field editor attached, which is the same symptom — a caret that blinks
         // and a field that never sees a key.
-        DispatchQueue.main.async {
+        // Weakly, and only if this is still *the* panel: `hide` can run before these turns —
+        // a second hotkey press, or a dismissal delivered in the same pass — and ordering a
+        // window front after that would leave one on screen with every monitor already torn
+        // down and nothing left that could close it.
+        DispatchQueue.main.async { [weak self, weak panel] in
+            guard let self, let panel, self.panel === panel else { return }
+
             panel.makeKeyAndOrderFront(nil)
             let content = panel.contentView as? SearchPanelContentView
             content?.focusField()
 
             // One more turn if it did not take. Activation timing is not something to be
             // clever about, and the cost of being wrong is a panel that ignores the keyboard.
-            if content?.isFieldFocused == false {
-                DispatchQueue.main.async {
-                    panel.makeKeyAndOrderFront(nil)
-                    content?.focusField()
-                }
+            guard content?.isFieldFocused == false else { return }
+            DispatchQueue.main.async { [weak self, weak panel] in
+                guard let self, let panel, self.panel === panel else { return }
+                panel.makeKeyAndOrderFront(nil)
+                content?.focusField()
             }
         }
 
@@ -95,8 +112,11 @@ final class SearchPanelController {
 
         // After a beat, so the rows have drawn at least once. No-op unless the diagnostics
         // default is set.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak panel] in
-            (panel?.contentView as? SearchPanelContentView)?.captureDiagnostic()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self, weak panel] in
+            MainActor.assumeIsolated {
+                guard let self, let panel, self.panel === panel else { return }
+                (panel.contentView as? SearchPanelContentView)?.captureDiagnostic()
+            }
         }
     }
 
@@ -109,10 +129,15 @@ final class SearchPanelController {
         if let outsideClickMonitor { NSEvent.removeMonitor(outsideClickMonitor) }
         outsideClickMonitor = nil
 
-        if let deactivationObserver {
-            NotificationCenter.default.removeObserver(deactivationObserver)
+        for observer in [deactivationObserver, keyWindowObserver].compactMap({ $0 }) {
+            NotificationCenter.default.removeObserver(observer)
         }
         deactivationObserver = nil
+        keyWindowObserver = nil
+
+        settleWork?.cancel()
+        settleWork = nil
+        isSettling = false
 
         panel?.orderOut(nil)
         panel = nil
@@ -182,7 +207,10 @@ final class SearchPanelController {
     /// typing still reaches the field.
     private func observeKeys() {
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
-            guard let self, self.isVisible else { return event }
+            // Scoped to the panel's own window. A local monitor sees every key the *app*
+            // receives, so without this the panel would go on swallowing arrows and Return
+            // typed into the Settings window — and act on them.
+            guard let self, let panel = self.panel, event.window === panel else { return event }
             return self.handle(event) ? nil : event
         }
     }
@@ -262,9 +290,12 @@ final class SearchPanelController {
     /// deactivation first.
     private func observeDismissal() {
         isSettling = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+        settleWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
             MainActor.assumeIsolated { self?.isSettling = false }
         }
+        settleWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: work)
 
         // Global monitors see only what happens in *other* applications, which is exactly the
         // "clicked somewhere else" the panel should close for. Clicks inside it are local
@@ -281,6 +312,22 @@ final class SearchPanelController {
             queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.dismissUnlessSettling() }
+        }
+
+        // Another window of ours taking key — Settings, opened from the menu while the panel
+        // is up. Neither of the two above fires for that: the click is a local event, and the
+        // app never resigns active.
+        keyWindowObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didBecomeKeyNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            MainActor.assumeIsolated {
+                guard let self, let window = notification.object as? NSWindow,
+                    window !== self.panel
+                else { return }
+                self.dismissUnlessSettling()
+            }
         }
     }
 

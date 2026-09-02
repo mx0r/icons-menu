@@ -1,5 +1,17 @@
 import AppKit
 
+/// Shared by the header and the rows, because they have to agree: the magnifier sits in the
+/// same column as the rows' application icons, so the query lines up with the results it
+/// produces. Two copies of these numbers is one edit away from breaking that.
+enum PanelMetrics {
+    static let rowHeight: CGFloat = 38
+    static let headerHeight: CGFloat = 54
+    static let footerHeight: CGFloat = 30
+    static let inset: CGFloat = 14
+    static let icon: CGFloat = 20
+    static let gap: CGFloat = 9
+}
+
 /// The panel's insides: a search field, a table of matches, and a hint bar.
 ///
 /// AppKit rather than SwiftUI. A plain `NSTextField` is a real text field — selection,
@@ -22,14 +34,7 @@ final class SearchPanelContentView: NSVisualEffectView {
     private var chipGap: NSLayoutConstraint!
     private var fieldGap: NSLayoutConstraint!
 
-    private enum Metrics {
-        static let rowHeight: CGFloat = 38
-        static let headerHeight: CGFloat = 54
-        static let footerHeight: CGFloat = 30
-        static let inset: CGFloat = 14
-        static let icon: CGFloat = 20
-        static let gap: CGFloat = 9
-    }
+    private typealias Metrics = PanelMetrics
 
     init(model: SearchModel, onActivate: @escaping () -> Void) {
         self.model = model
@@ -63,8 +68,11 @@ final class SearchPanelContentView: NSVisualEffectView {
         guard let window else { return }
         window.makeFirstResponder(field)
         // Caret at the end rather than a full selection, so the first keystroke adds to the
-        // query instead of replacing it.
-        field.currentEditor()?.selectedRange = NSRange(location: field.stringValue.count, length: 0)
+        // query instead of replacing it. Measured in UTF-16 units, which is what `NSRange`
+        // counts — `String.count` counts characters, and one emoji in the field would put the
+        // caret in the wrong place or past the end.
+        let length = (field.stringValue as NSString).length
+        field.currentEditor()?.selectedRange = NSRange(location: length, length: 0)
     }
 
     /// Whether the field is genuinely taking keystrokes, as opposed to merely looking focused.
@@ -87,7 +95,7 @@ final class SearchPanelContentView: NSVisualEffectView {
     /// — so a capture that looks right beside a screenshot that looks wrong says the fault is
     /// downstream of this app, and one that looks wrong says it is ours.
     func captureDiagnostic() {
-        guard UserDefaults.standard.bool(forKey: "IconDiagnostics"), let window else { return }
+        guard Preferences.shared.isDiagnosticsEnabled, let window else { return }
 
         let view = scroll
         guard let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
@@ -124,6 +132,13 @@ final class SearchPanelContentView: NSVisualEffectView {
         field.drawsBackground = false
         field.focusRingType = .none
         field.font = .systemFont(ofSize: 19, weight: .regular)
+        // A field built in code neither wraps nor scrolls by default — Interface Builder sets
+        // these, plain `NSTextField()` does not — so a query wider than the field would clip,
+        // taking the caret with it.
+        field.usesSingleLineMode = true
+        field.lineBreakMode = .byClipping
+        field.cell?.wraps = false
+        field.cell?.isScrollable = true
         // Not "every": what is searched is what Settings has left switched on.
         field.placeholderString = "Search menu bar items"
         field.delegate = self
@@ -361,11 +376,7 @@ private final class SearchRowView: NSTableCellView {
     /// computed from the row's own height cannot drift out of step with the content.
     override var isFlipped: Bool { true }
 
-    private enum Metrics {
-        static let inset: CGFloat = 14
-        static let icon: CGFloat = 20
-        static let gap: CGFloat = 9
-    }
+    private typealias Metrics = PanelMetrics
 
     init() {
         super.init(frame: .zero)

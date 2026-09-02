@@ -53,7 +53,13 @@ final class Preferences: ObservableObject {
 
     private let defaults: UserDefaults
 
+    /// Writes what the search panel's rows actually drew to the Desktop. Set by hand — there
+    /// is no UI for it — and read here rather than off `UserDefaults` at the call site, so
+    /// every key this app knows about stays in one place.
+    var isDiagnosticsEnabled: Bool { defaults.bool(forKey: Key.diagnostics) }
+
     private enum Key {
+        static let diagnostics = "IconDiagnostics"
         static let hidden = "HiddenBundleIDs"
         static let hiddenItems = "HiddenItemIDs"
         static let hotkeyEnabled = "HotkeyEnabled"

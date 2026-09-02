@@ -262,8 +262,10 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Toggle("Shortcut", isOn: $preferences.isHotkeyEnabled)
-                HotkeyRecorder(shortcut: $preferences.hotkey)
-                    .disabled(!preferences.isHotkeyEnabled)
+                HotkeyRecorder(
+                    shortcut: $preferences.hotkey,
+                    isEnabled: preferences.isHotkeyEnabled
+                )
             }
 
             if !preferences.isHotkeyEnabled {

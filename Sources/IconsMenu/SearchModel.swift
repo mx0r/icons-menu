@@ -39,6 +39,7 @@ final class SearchModel {
     var count: Int { showsApplications ? applications.count : results.count }
 
     private var allRows: [SearchIndex.Row] = []
+    private var isSuspended = false
     private let inventory: () -> Inventory
     private let preferences = Preferences.shared
 
@@ -54,10 +55,17 @@ final class SearchModel {
         refilter()
     }
 
-    func reset() {
+    /// Cleared and rebuilt in one pass, for opening the panel.
+    ///
+    /// Suspended in between so that clearing the query does not filter and sort the rows
+    /// captured at the previous open — rows that can name applications which have since quit,
+    /// and whose results nothing is left to display.
+    func prepare() {
+        isSuspended = true
         scope = nil
         query = ""
-        refilter()
+        isSuspended = false
+        reload()
     }
 
     /// Arrows wrap — up from the first row lands on the last — which is the shortest route to
@@ -129,6 +137,8 @@ final class SearchModel {
     }
 
     private func refilter() {
+        guard !isSuspended else { return }
+
         let pool = scope.map { scope in allRows.filter { $0.bundleID == scope.bundleID } } ?? allRows
         results = SearchIndex.filter(pool, query: query)
         selection = 0
