@@ -56,10 +56,20 @@ final class SearchPanelContentView: NSVisualEffectView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("not used") }
 
-    /// Called after the panel is on screen: a field cannot become first responder before its
-    /// window exists.
+    /// Called after the panel is on screen and the app is forward: a field cannot become first
+    /// responder before its window exists, and the field editor it types into is only attached
+    /// once it has.
     func focusField() {
-        window?.makeFirstResponder(field)
+        guard let window else { return }
+        window.makeFirstResponder(field)
+        // Caret at the end rather than a full selection, so the first keystroke adds to the
+        // query instead of replacing it.
+        field.currentEditor()?.selectedRange = NSRange(location: field.stringValue.count, length: 0)
+    }
+
+    /// Whether the field is genuinely taking keystrokes, as opposed to merely looking focused.
+    var isFieldFocused: Bool {
+        window?.firstResponder === field.currentEditor()
     }
 
     // MARK: - Building

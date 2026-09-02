@@ -60,20 +60,37 @@ final class SearchPanelController {
 
         position(panel)
 
-        // A `.nonactivatingPanel` can take key focus without bringing the app forward, which
-        // is what keeps the app you were using from losing its own focus ring. If the window
-        // server declines, take the visible activation rather than a panel nobody can type
-        // into.
+        // Activation first, unconditionally.
+        //
+        // `isKeyWindow` is not the question it looks like: key window is per application, so
+        // a panel ordered front by a background app reports true while the window server goes
+        // on delivering every keystroke to whatever is actually frontmost — a panel that looks
+        // focused and swallows nothing. A `.nonactivatingPanel` can take key without
+        // activating, but only when the *user* clicks it; ordering one front from a hotkey is
+        // not that. Typing has to work, so the app comes forward, and `hide` hands the front
+        // back afterwards.
+        NSApp.activate(ignoringOtherApps: true)
+        didActivate = true
         panel.makeKeyAndOrderFront(nil)
-        didActivate = false
-        if !panel.isKeyWindow {
-            NSApp.activate(ignoringOtherApps: true)
-            panel.makeKeyAndOrderFront(nil)
-            didActivate = true
-        }
 
-        // Only now: a text field cannot become first responder before its window is on screen.
-        (panel.contentView as? SearchPanelContentView)?.focusField()
+        // Activation is not finished when it returns. Re-asserted a turn later, together with
+        // the focus: a field made first responder while the app is still coming forward ends
+        // up with no field editor attached, which is the same symptom — a caret that blinks
+        // and a field that never sees a key.
+        DispatchQueue.main.async {
+            panel.makeKeyAndOrderFront(nil)
+            let content = panel.contentView as? SearchPanelContentView
+            content?.focusField()
+
+            // One more turn if it did not take. Activation timing is not something to be
+            // clever about, and the cost of being wrong is a panel that ignores the keyboard.
+            if content?.isFieldFocused == false {
+                DispatchQueue.main.async {
+                    panel.makeKeyAndOrderFront(nil)
+                    content?.focusField()
+                }
+            }
+        }
 
         observeKeys()
         observeDismissal()
