@@ -16,7 +16,12 @@ application name, and reaches them through the Accessibility API rather than by 
 their position on screen stops mattering.
 
 <p align="center">
-  <img src="docs/screenshot.png" alt="The Icons Menu dropdown, listing every menu bar item on the system by application name" width="340">
+  <img src="docs/screenshot.png" alt="The Icons Menu dropdown, listing every menu bar item on the system by application name" width="320">
+  <br>
+  <sub>The dropdown: one row per application, alphabetical. A chevron means that
+  application's own menu is mirrored behind it; a row without one is a single click that
+  presses the item. Rows look the same whether the icon is visible in the bar or parked
+  off-screen, because using them is the same.</sub>
 </p>
 
 Rows with a chevron open the application's own menu, mirrored:
@@ -210,8 +215,16 @@ Icons Menu is subject to the same overflow it exists to solve, so:
 
 One row per application, with a switch that keeps it out of the dropdown. An application
 contributing more than one item expands, with a switch per item inside — one switch for all
-seven of Control Center's items, or a way to drop just the two you never use. The disclosure
-only appears where there is something to disclose.
+of Control Center's items, or a way to drop just the ones you never use. The chevron only
+appears where there is something to expand.
+
+<p align="center">
+  <img src="docs/settings.png" alt="The Icons Menu settings window: a list of applications with switches, Control Center expanded to show a switch per item" width="420">
+  <br>
+  <sub>Control Center expanded, with its Clock item switched off; SystemUIServer and
+  TextInput switched off entirely. The footer counts what is hidden and offers the way back
+  for anything whose application has since quit.</sub>
+</p>
 
 The two levels are stored separately and keyed differently. Applications are keyed by
 **bundle ID**, which is as stable as identity gets here. Items are keyed by
