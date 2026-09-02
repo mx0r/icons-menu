@@ -36,24 +36,37 @@ final class InventoryModel: ObservableObject {
     }
 }
 
+/// One application's presence in the menu bar — the granularity the dropdown groups at, and
+/// the granularity hiding works at.
+private struct AppEntry: Identifiable {
+    let bundleID: String
+    let name: String
+    let pid: pid_t
+    let itemCount: Int
+    let offScreenCount: Int
+
+    var id: String { bundleID }
+}
+
 struct SettingsView: View {
 
     @StateObject private var model = InventoryModel()
     @StateObject private var launchAtLogin = LaunchAtLogin()
+    @ObservedObject private var preferences = Preferences.shared
 
     var body: some View {
         VStack(spacing: 0) {
             if model.isTrusted {
-                itemList
+                appList
             } else {
                 permissionNotice
             }
             Divider()
-            preferences
+            settings
             Divider()
             footer
         }
-        .frame(minWidth: 460, minHeight: 380)
+        .frame(minWidth: 460, minHeight: 420)
         // Login Items can be changed from System Settings, and nothing tells us when it is.
         .onAppear { launchAtLogin.refresh() }
         .onReceive(
@@ -61,45 +74,81 @@ struct SettingsView: View {
         ) { _ in launchAtLogin.refresh() }
     }
 
-    private var itemList: some View {
+    /// One row per application, matching the dropdown, with a switch that keeps it out.
+    ///
+    /// The switch is the point of this list. What used to be here — an "Open" button per
+    /// item, each item's x position, a separate section for off-screen items — was a view of
+    /// the same data the menu already presents better, so it has gone. Off-screen is still
+    /// worth knowing and survives as a caption.
+    private var appList: some View {
         List {
-            if !model.inventory.unreachable.isEmpty {
-                Section("Off-screen — unreachable by clicking") {
-                    ForEach(model.inventory.unreachable) { row(for: $0) }
-                }
-            }
-            Section("In the menu bar") {
-                ForEach(model.inventory.reachable) { row(for: $0) }
+            Section("Show in the menu") {
+                ForEach(apps) { row(for: $0) }
             }
         }
     }
 
-    private func row(for item: StatusItem) -> some View {
+    /// Annotated at every step: left to infer, this expression is one the type checker spends
+    /// an absurd amount of time on.
+    private var apps: [AppEntry] {
+        let byApp: [String: [StatusItem]] = Dictionary(
+            grouping: model.inventory.items,
+            by: \.bundleID
+        )
+        let entries: [AppEntry] = byApp.map { bundleID, items in
+            AppEntry(
+                bundleID: bundleID,
+                name: Inventory.displayName(for: items[0]),
+                pid: items[0].pid,
+                itemCount: items.count,
+                offScreenCount: items.filter { !$0.isOnScreen }.count
+            )
+        }
+        return entries.sorted {
+            $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }
+    }
+
+    private func row(for app: AppEntry) -> some View {
         HStack(spacing: 10) {
-            if let icon = NSRunningApplication(processIdentifier: item.pid)?.icon {
+            if let icon = NSRunningApplication(processIdentifier: app.pid)?.icon {
                 Image(nsImage: icon).resizable().frame(width: 18, height: 18)
             }
 
             VStack(alignment: .leading, spacing: 1) {
-                Text(model.inventory.qualifiedName(for: item))
-                Text(item.bundleID)
+                Text(app.name)
+                Text(subtitle(for: app))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             Spacer()
 
-            if let frame = item.frame {
-                Text("x \(Int(frame.origin.x))")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
-            }
-
-            Button("Open") { ItemActivator.press(item) }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+            Toggle(
+                "Show \(app.name) in the menu",
+                isOn: Binding(
+                    get: { !preferences.isHidden(app.bundleID) },
+                    set: { preferences.setHidden(!$0, for: app.bundleID) }
+                )
+            )
+            .labelsHidden()
+            .toggleStyle(.switch)
+            .controlSize(.small)
         }
         .padding(.vertical, 2)
+    }
+
+    private func subtitle(for app: AppEntry) -> String {
+        var parts = [app.bundleID]
+        if app.itemCount > 1 { parts.append("\(app.itemCount) items") }
+        if app.offScreenCount > 0 {
+            parts.append(
+                app.offScreenCount == app.itemCount
+                    ? "off-screen"
+                    : "\(app.offScreenCount) off-screen"
+            )
+        }
+        return parts.joined(separator: " · ")
     }
 
     private var permissionNotice: some View {
@@ -122,8 +171,13 @@ struct SettingsView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private var preferences: some View {
-        VStack(alignment: .leading, spacing: 4) {
+    private var settings: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Text("Shortcut")
+                HotkeyRecorder(shortcut: $preferences.hotkey)
+            }
+
             Toggle(
                 "Open Icons Menu at login",
                 isOn: Binding(get: { launchAtLogin.isEnabled }, set: { launchAtLogin.set($0) })
@@ -149,6 +203,11 @@ struct SettingsView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer()
+            // The only way back for an app that has since quit: hidden but with no row to
+            // switch on, it would otherwise stay hidden forever.
+            if !preferences.hiddenBundleIDs.isEmpty {
+                Button("Show all") { preferences.showAll() }
+            }
             Button("Rescan") { model.refresh() }
         }
         .padding(10)
@@ -156,11 +215,11 @@ struct SettingsView: View {
 
     private var summary: String {
         guard model.isTrusted else { return "Not authorised" }
-        let total = model.inventory.items.count
-        let hidden = model.inventory.unreachable.count
+        let count = apps.count
+        let hidden = preferences.hiddenBundleIDs.count
         return hidden == 0
-            ? "\(total) items, all reachable"
-            : "\(total) items, \(hidden) off-screen"
+            ? "\(count) applications"
+            : "\(count) applications, \(hidden) hidden"
     }
 }
 
@@ -171,7 +230,7 @@ final class SettingsWindowController: NSWindowController {
 
     convenience init() {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 460, height: 420),
+            contentRect: NSRect(x: 0, y: 0, width: 460, height: 480),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false

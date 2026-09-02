@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 
 /// Owns this app's own menu bar item and the dropdown hanging off it.
 ///
@@ -13,6 +14,8 @@ final class MenuController: NSObject, NSMenuDelegate {
     private var inventory = Inventory(items: [])
     private var settingsWindowController: SettingsWindowController?
     private var hotkey: GlobalHotkey?
+    private let preferences = Preferences.shared
+    private var hotkeyObserver: AnyCancellable?
 
     /// Last completed scan, including every item's full menu tree.
     ///
@@ -48,13 +51,12 @@ final class MenuController: NSObject, NSMenuDelegate {
 
         statusItem.autosaveName = MenuController.autosaveName
         statusItem.button?.image = IconArtwork.menuBarImage()
-        statusItem.button?.toolTip =
-            "Icons Menu — reach any menu bar item (\(GlobalHotkey.defaultShortcutDescription))"
 
         menu.delegate = self
         statusItem.menu = menu
 
-        installHotkey()
+        installHotkey(preferences.hotkey)
+        observeHotkeyChanges()
         observeRunningApplications()
         startWarmUp()
     }
@@ -140,13 +142,32 @@ final class MenuController: NSObject, NSMenuDelegate {
     }
 
     /// Being rightmost makes the icon unlikely to be pushed off-screen, but on a narrow or
-    /// notched display it is still possible — and an unreachable IconsMenu defeats the
+    /// notched display it is still possible — and an unreachable Icons Menu defeats the
     /// entire point. The hotkey is the actual guarantee, since it pops the menu at the
     /// pointer where the icon's position is irrelevant.
-    private func installHotkey() {
-        hotkey = GlobalHotkey.defaultShortcut { [weak self] in
+    private func installHotkey(_ shortcut: HotkeyShortcut) {
+        // Dropped before registering: Carbon refuses a duplicate, and re-registering the same
+        // combination is the common case when only the label changed.
+        hotkey = nil
+        hotkey = GlobalHotkey.register(shortcut) { [weak self] in
             MainActor.assumeIsolated { self?.popUpMenuAtPointer() }
         }
+
+        // The Settings recorder checks availability before committing, so a failure here means
+        // something claimed the combination in between. Say so in the tooltip rather than
+        // leaving a shortcut advertised that does nothing.
+        let suffix = hotkey == nil ? "\(shortcut.label) is unavailable" : shortcut.label
+        statusItem.button?.toolTip = "Icons Menu — reach any menu bar item (\(suffix))"
+    }
+
+    private func observeHotkeyChanges() {
+        // `dropFirst` because `@Published` replays the current value on subscribe, which init
+        // has just registered.
+        hotkeyObserver = preferences.$hotkey
+            .dropFirst()
+            .sink { [weak self] shortcut in
+                MainActor.assumeIsolated { self?.installHotkey(shortcut) }
+            }
     }
 
     private func popUpMenuAtPointer() {
@@ -198,14 +219,20 @@ final class MenuController: NSObject, NSMenuDelegate {
         // then worked. A warm-up timer keeps the cache populated instead.
         inventory = cachedInventory
 
+        // Applying the hidden set here, on every open, is what makes Settings take effect
+        // immediately — there is nothing to notify and nothing to invalidate.
+        let visible = inventory.items.filter { !preferences.isHidden($0.bundleID) }
+
         if inventory.items.isEmpty {
             menu.addItem(disabledItem(rescanning ? "Scanning menu bar…" : "No menu bar items found"))
+        } else if visible.isEmpty {
+            menu.addItem(disabledItem("Every application is hidden — see Settings"))
         } else {
             // One flat alphabetical list. Splitting off-screen items into their own section
             // sounds useful but is not: every row works identically whether or not you can
             // see the icon, so the distinction tells you nothing actionable and costs two
             // headings plus a separator.
-            addRows(for: inventory.items, to: menu)
+            addRows(for: visible, to: menu)
         }
 
         addFooter(to: menu)

@@ -45,8 +45,8 @@ aim a pointer at.)
 
 There is deliberately no off-screen/visible distinction. It sounds useful and is not: every
 row behaves identically whether or not you can see the icon, so the split conveys nothing
-actionable. The Settings window still reports it, alongside each item's x position, because
-there it is diagnostic rather than decorative.
+actionable. Settings still notes which applications are off-screen, because there it is
+diagnostic rather than decorative.
 
 One row per *application*, not per item: an app contributing several status items collapses
 into a single submenu. Control Center is the case that forces this — it alone accounts for
@@ -195,9 +195,32 @@ Icons Menu is subject to the same overflow it exists to solve, so:
   app seeds `0` on first launch and lands as far right as the bar allows, immediately left
   of Control Center. That makes it the last third-party item to ever be pushed off. The
   value is only seeded when absent, so dragging the icon somewhere else sticks.
-- It registers **⌃⌥M** as a system-wide hotkey, which pops the menu at the pointer. This is
-  the actual guarantee: on a narrow or notched display even the rightmost item can be
-  pushed off, and an unreachable Icons Menu would defeat the whole point.
+- It registers a system-wide hotkey — **⌃⌥M** by default — which pops the menu at the
+  pointer. This is the actual guarantee: on a narrow or notched display even the rightmost
+  item can be pushed off, and an unreachable Icons Menu would defeat the whole point.
+
+  The combination is recorded in Settings. Carbon has no way to ask whether one is free, so
+  the recorder finds out the only way available: it registers the candidate, sees whether
+  that succeeded, and releases it again before the real registration goes in. A combination
+  another app already owns is refused with a message rather than accepted into a shortcut
+  that silently does nothing. It insists on ⌃, ⌥ or ⌘ — a system-wide ⇧A would eat the
+  letter everywhere.
+
+## Settings
+
+One row per application, with a switch that keeps it out of the dropdown. Hiding is keyed to
+the **bundle ID**, not to item ids: an item's ordinal shifts as its app adds or drops items,
+so a saved set of item ids would quietly start hiding the wrong thing. It also matches how
+the menu groups, so one switch covers all seven of Control Center's items.
+
+The hidden set is applied while the menu is being rebuilt, which happens on every open — so
+a switch takes effect immediately, with nothing to invalidate and no reload to trigger.
+
+The list used to be an inventory inspector: an "Open" button per item, each item's x
+position, a separate section for off-screen ones. That was a second, worse view of what the
+dropdown already shows, so the switch replaced it; off-screen survives as a caption because
+it is genuinely diagnostic. **Show all** in the footer exists for one specific case — an app
+that has since quit is still hidden, and has no row to switch back on.
 
 ## Launch at login
 
@@ -247,18 +270,21 @@ Sources/Core/         AXAttributes      AX wrappers; nil rather than errors
 Sources/IconsMenu/    IconsMenuApp      LSUIElement entry point, permission gate
                       MenuController    the status item and its dropdown
                       GlobalHotkey      Carbon RegisterEventHotKey wrapper
+                      HotkeyRecorder    records a shortcut, checks it is free
                       LaunchAtLogin     SMAppService login item registration
-                      SettingsView      inventory inspector and preferences
+                      Preferences       hidden apps and the hotkey, in UserDefaults
+                      SettingsView      the app list and its switches
 Sources/axprobe/      main              CLI over the same core, for debugging AX
 Sources/iconforge/    main              renders the .icns; run via `make icon`
 ```
 
 ## Not implemented
 
-- **Hiding items.** macOS offers exactly one mechanism — an `NSStatusItem` expanded to
-  ~10,000pt, pushing everything to its left off-screen — and it hides a *contiguous run*,
-  not an arbitrary selection. Hiding a specific set means reordering the bar with synthesised
-  ⌘-drag events, which is the fragile part of Bartender and Ice and what broke Ice on Tahoe.
-  Deliberately skipped: with Icons Menu, an overflowing bar no longer costs you access, which
-  removes most of the reason to hide anything.
-- **Configurable hotkey.** ⌃⌥M is hardcoded.
+- **Hiding items from the menu bar itself.** Settings hides applications from *this app's*
+  dropdown; their icons stay exactly where they were in the bar. Removing them from the bar
+  is a different problem, and macOS offers exactly one mechanism — an `NSStatusItem`
+  expanded to ~10,000pt, pushing everything to its left off-screen — which hides a
+  *contiguous run*, not an arbitrary selection. Hiding a specific set means reordering the
+  bar with synthesised ⌘-drag events, which is the fragile part of Bartender and Ice and
+  what broke Ice on Tahoe. Deliberately skipped: with Icons Menu, an overflowing bar no
+  longer costs you access, which removes most of the reason to hide anything.

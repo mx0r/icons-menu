@@ -90,11 +90,44 @@ final class GlobalHotkey {
 }
 
 extension GlobalHotkey {
-    /// The default: ⌃⌥M. Chosen because macOS claims no combination in that space, and
-    /// neither do the common menu bar utilities.
-    static func defaultShortcut(action: @escaping () -> Void) -> GlobalHotkey? {
-        GlobalHotkey(keyCode: kVK_ANSI_M, modifiers: controlKey | optionKey, action: action)
+    /// Returns nil if the combination is already claimed, exactly as the initialiser does.
+    static func register(_ shortcut: HotkeyShortcut, action: @escaping () -> Void) -> GlobalHotkey? {
+        GlobalHotkey(keyCode: shortcut.keyCode, modifiers: shortcut.modifiers, action: action)
     }
 
-    static let defaultShortcutDescription = "⌃⌥M"
+    /// Whether the combination can be claimed right now.
+    ///
+    /// Answered by actually registering it and letting go again, because Carbon offers no way
+    /// to ask. The registration is dropped before returning, so the caller is free to install
+    /// the shortcut for real — holding it here would make the caller's attempt fail.
+    static func isAvailable(_ shortcut: HotkeyShortcut) -> Bool {
+        var probe = GlobalHotkey(keyCode: shortcut.keyCode, modifiers: shortcut.modifiers) {}
+        let available = probe != nil
+        probe = nil
+        return available
+    }
+}
+
+/// A key combination, in the Carbon terms `RegisterEventHotKey` speaks.
+struct HotkeyShortcut: Equatable {
+
+    let keyCode: Int
+
+    /// A Carbon modifier mask (`controlKey`, `optionKey`, …), not `NSEvent.ModifierFlags`.
+    let modifiers: Int
+
+    /// How to print it.
+    ///
+    /// Captured when the shortcut is recorded rather than derived on demand: going from a key
+    /// code back to a character means asking the current keyboard layout through
+    /// `UCKeyTranslate`, and what the user actually pressed is the honest thing to show.
+    let label: String
+
+    /// ⌃⌥M. Chosen because macOS claims no combination in that space, and neither do the
+    /// common menu bar utilities.
+    static let `default` = HotkeyShortcut(
+        keyCode: kVK_ANSI_M,
+        modifiers: controlKey | optionKey,
+        label: "⌃⌥M"
+    )
 }
