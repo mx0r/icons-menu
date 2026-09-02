@@ -21,7 +21,15 @@ final class SearchPanelController {
     private let model: SearchModel
     private var panel: NSPanel?
     private var keyMonitor: Any?
-    private var resignObserver: NSObjectProtocol?
+    private var outsideClickMonitor: Any?
+    private var deactivationObserver: NSObjectProtocol?
+
+    /// True for a moment after opening, while activation settles. See `observeDismissal`.
+    private var isSettling = false
+
+    /// Whether opening the panel had to bring the app forward, and so whether closing it
+    /// should hand the front back.
+    private var didActivate = false
 
     init(inventory: @escaping () -> Inventory) {
         model = SearchModel(inventory: inventory)
@@ -29,7 +37,10 @@ final class SearchPanelController {
 
     deinit {
         if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
-        if let resignObserver { NotificationCenter.default.removeObserver(resignObserver) }
+        if let outsideClickMonitor { NSEvent.removeMonitor(outsideClickMonitor) }
+        if let deactivationObserver {
+            NotificationCenter.default.removeObserver(deactivationObserver)
+        }
     }
 
     var isVisible: Bool { panel?.isVisible ?? false }
@@ -54,27 +65,44 @@ final class SearchPanelController {
         // server declines, take the visible activation rather than a panel nobody can type
         // into.
         panel.makeKeyAndOrderFront(nil)
+        didActivate = false
         if !panel.isKeyWindow {
             NSApp.activate(ignoringOtherApps: true)
             panel.makeKeyAndOrderFront(nil)
+            didActivate = true
         }
 
         // Only now: a text field cannot become first responder before its window is on screen.
         (panel.contentView as? SearchPanelContentView)?.focusField()
 
         observeKeys()
-        observeResignation(of: panel)
+        observeDismissal()
     }
 
     func hide() {
+        guard panel != nil else { return }
+
         if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
         keyMonitor = nil
 
-        if let resignObserver { NotificationCenter.default.removeObserver(resignObserver) }
-        resignObserver = nil
+        if let outsideClickMonitor { NSEvent.removeMonitor(outsideClickMonitor) }
+        outsideClickMonitor = nil
+
+        if let deactivationObserver {
+            NotificationCenter.default.removeObserver(deactivationObserver)
+        }
+        deactivationObserver = nil
 
         panel?.orderOut(nil)
         panel = nil
+
+        // Hand the front back to whatever the user was in. Only when opening took it: an
+        // accessory app that stays active after its panel closes leaves the previous app
+        // looking focused while its keystrokes go nowhere.
+        if didActivate {
+            didActivate = false
+            NSApp.deactivate()
+        }
     }
 
     // MARK: - The panel
@@ -93,9 +121,10 @@ final class SearchPanelController {
         panel.hasShadow = true
         panel.isMovableByWindowBackground = false
         panel.animationBehavior = .utilityWindow
-        // Follows the user to whatever space they are on, and never shows up in Exposé as a
-        // window of its own.
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
+        // Follows the user to whatever space they are on, and works over a full-screen app.
+        // Explicitly *not* `.transient`, which asks AppKit to hide the window whenever the app
+        // is not active — a promise it can keep in the middle of the app becoming active.
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
 
         panel.contentView = SearchPanelContentView(model: model) { [weak self] in self?.hide() }
         return panel
@@ -192,13 +221,43 @@ final class SearchPanelController {
         }
     }
 
-    private func observeResignation(of panel: NSPanel) {
-        resignObserver = NotificationCenter.default.addObserver(
-            forName: NSWindow.didResignKeyNotification,
-            object: panel,
+    /// Closing on a click elsewhere or on the app losing the front — deliberately *not* on the
+    /// panel resigning key.
+    ///
+    /// Bringing an accessory app forward churns key status for a moment after the panel opens,
+    /// and a resign delivered during that churn shut the panel the instant it appeared. It
+    /// only ever happened on the first press of the hotkey, because the second one found the
+    /// app already active with nothing left to settle — the same shape as the dropdown's old
+    /// open-and-shut flicker, and the same lesson: do not act on state that is still moving.
+    ///
+    /// The settling window covers the other half of it: activation itself can arrive as a
+    /// deactivation first.
+    private func observeDismissal() {
+        isSettling = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            MainActor.assumeIsolated { self?.isSettling = false }
+        }
+
+        // Global monitors see only what happens in *other* applications, which is exactly the
+        // "clicked somewhere else" the panel should close for. Clicks inside it are local
+        // events and never arrive here.
+        outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(
+            matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.dismissUnlessSettling() }
+        }
+
+        deactivationObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didResignActiveNotification,
+            object: nil,
             queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.hide() }
+            MainActor.assumeIsolated { self?.dismissUnlessSettling() }
         }
+    }
+
+    private func dismissUnlessSettling() {
+        guard !isSettling else { return }
+        hide()
     }
 }
