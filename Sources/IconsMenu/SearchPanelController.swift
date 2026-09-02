@@ -92,6 +92,12 @@ final class SearchPanelController {
 
         observeKeys()
         observeDismissal()
+
+        // After a beat, so the rows have drawn at least once. No-op unless the diagnostics
+        // default is set.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak panel] in
+            (panel?.contentView as? SearchPanelContentView)?.captureDiagnostic()
+        }
     }
 
     func hide() {

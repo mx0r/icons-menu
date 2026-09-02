@@ -80,6 +80,36 @@ final class SearchPanelContentView: NSVisualEffectView {
         table.reloadData()
     }
 
+    /// Writes what the rows actually drew to the Desktop, along with the display they drew on.
+    ///
+    /// Off unless `defaults write info.hudak.macos.IconsMenu IconDiagnostics -bool true`.
+    /// `cacheDisplay` captures the view's own drawing, before the window server composites it
+    /// — so a capture that looks right beside a screenshot that looks wrong says the fault is
+    /// downstream of this app, and one that looks wrong says it is ours.
+    func captureDiagnostic() {
+        guard UserDefaults.standard.bool(forKey: "IconDiagnostics"), let window else { return }
+
+        let view = scroll
+        guard let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
+        view.cacheDisplay(in: view.bounds, to: rep)
+
+        let scale = window.backingScaleFactor
+        let name = window.screen?.localizedName.replacingOccurrences(of: " ", with: "-") ?? "none"
+        let path = NSString(string: "~/Desktop/iconsmenu-diag-\(name)-\(scale)x.png")
+            .expandingTildeInPath
+
+        try? rep.representation(using: .png, properties: [:])?
+            .write(to: URL(fileURLWithPath: path))
+
+        NSLog(
+            "IconsMenu diagnostics: screen=%@ scale=%@ frame=%@ wrote %@",
+            name,
+            "\(scale)",
+            "\(window.frame)",
+            path
+        )
+    }
+
     // MARK: - Building
 
     private func buildField() {
