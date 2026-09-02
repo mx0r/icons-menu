@@ -86,35 +86,59 @@ struct SettingsView: View {
     /// item, each item's x position, a separate section for off-screen items — was a view of
     /// the same data the menu already presents better, so it has gone. Off-screen is still
     /// worth knowing and survives as a caption.
+    /// Rows are emitted flat rather than through `DisclosureGroup`, which hangs its chevron in
+    /// the list's left gutter and aligns it to the label's first text baseline — so it sat
+    /// outside the row, above centre, and only the expandable rows had it. Here the chevron is
+    /// a column of the row itself, present on every row and merely invisible where there is
+    /// nothing to expand, which keeps every icon on the same x.
     private var appList: some View {
         List {
             Section("Show in the menu") {
                 ForEach(apps) { app in
-                    if app.items.count > 1 {
-                        DisclosureGroup(isExpanded: expansion(for: app)) {
-                            ForEach(app.items) { itemRow($0, in: app) }
-                        } label: {
-                            row(for: app)
-                        }
-                    } else {
-                        row(for: app)
+                    row(for: app)
+                    if expanded.contains(app.bundleID) {
+                        ForEach(app.items) { itemRow($0, in: app) }
                     }
                 }
             }
         }
     }
 
-    private func expansion(for app: AppEntry) -> Binding<Bool> {
-        Binding(
-            get: { expanded.contains(app.bundleID) },
-            set: { isExpanded in
-                if isExpanded {
-                    expanded.insert(app.bundleID)
-                } else {
-                    expanded.remove(app.bundleID)
-                }
+    private func toggleExpansion(of app: AppEntry) {
+        withAnimation(.easeOut(duration: 0.15)) {
+            if expanded.contains(app.bundleID) {
+                expanded.remove(app.bundleID)
+            } else {
+                expanded.insert(app.bundleID)
             }
-        )
+        }
+    }
+
+    private func chevron(for app: AppEntry) -> some View {
+        let isExpandable = app.items.count > 1
+        return Button {
+            toggleExpansion(of: app)
+        } label: {
+            Image(systemName: "chevron.right")
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(.secondary)
+                .rotationEffect(.degrees(expanded.contains(app.bundleID) ? 90 : 0))
+        }
+        .buttonStyle(.plain)
+        .frame(width: Layout.chevron)
+        .opacity(isExpandable ? 1 : 0)
+        .disabled(!isExpandable)
+        .accessibilityHidden(!isExpandable)
+    }
+
+    private enum Layout {
+        static let chevron: CGFloat = 12
+        static let icon: CGFloat = 18
+        static let spacing: CGFloat = 10
+
+        /// Where an app's name starts, and so where an item's name has to start to line up
+        /// underneath it.
+        static let indent = chevron + spacing + icon + spacing
     }
 
     /// Annotated at every step: left to infer, this expression is one the type checker spends
@@ -138,9 +162,15 @@ struct SettingsView: View {
     }
 
     private func row(for app: AppEntry) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: Layout.spacing) {
+            chevron(for: app)
+
             if let icon = NSRunningApplication(processIdentifier: app.pid)?.icon {
-                Image(nsImage: icon).resizable().frame(width: 18, height: 18)
+                Image(nsImage: icon)
+                    .resizable()
+                    .frame(width: Layout.icon, height: Layout.icon)
+            } else {
+                Color.clear.frame(width: Layout.icon, height: Layout.icon)
             }
 
             VStack(alignment: .leading, spacing: 1) {
@@ -191,6 +221,7 @@ struct SettingsView: View {
         // A hidden application takes its items with it, so these have nothing to say until it
         // is switched back on. Their own state is kept, not cleared.
         .disabled(preferences.isHidden(app: app.bundleID))
+        .padding(.leading, Layout.indent)
         .padding(.vertical, 1)
     }
 
