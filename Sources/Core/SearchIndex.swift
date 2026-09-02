@@ -39,11 +39,14 @@ public enum SearchIndex {
         /// keystroke and this is the string every keystroke searches.
         let haystack: String
 
-        /// What to show under the title. Nil when it would only repeat it, which is the case
-        /// for an application contributing a single unmirrorable item.
-        public var subtitle: String? {
-            let trail = [app] + path
-            guard !(path.isEmpty && title == app) else { return nil }
+        /// What to show under the title. Nil when it would only repeat it — an application
+        /// contributing a single unmirrorable item, or a top-level entry listed inside a
+        /// scope that already names the application.
+        public func subtitle(includingApp: Bool = true) -> String? {
+            let trail = includingApp ? [app] + path : path
+            guard !trail.isEmpty, !(path.isEmpty && title == app && includingApp) else {
+                return nil
+            }
             return trail.joined(separator: " › ")
         }
     }

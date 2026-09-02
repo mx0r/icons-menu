@@ -261,8 +261,16 @@ struct SettingsView: View {
     private var settings: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                Text("Shortcut")
+                Toggle("Shortcut", isOn: $preferences.isHotkeyEnabled)
                 HotkeyRecorder(shortcut: $preferences.hotkey)
+                    .disabled(!preferences.isHotkeyEnabled)
+            }
+
+            if !preferences.isHotkeyEnabled {
+                Text("No system-wide shortcut is registered. The menu bar icon still opens "
+                     + "the menu.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Toggle(

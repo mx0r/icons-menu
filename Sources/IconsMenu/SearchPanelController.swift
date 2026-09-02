@@ -1,7 +1,6 @@
 import AppKit
 // For the `kVK_` key codes, the same ones the hotkey recorder reads.
 import Carbon.HIToolbox
-import SwiftUI
 
 /// Borderless windows refuse key focus unless they say otherwise, and without key focus
 /// there is nothing to type into.
@@ -60,6 +59,9 @@ final class SearchPanelController {
             panel.makeKeyAndOrderFront(nil)
         }
 
+        // Only now: a text field cannot become first responder before its window is on screen.
+        (panel.contentView as? SearchPanelContentView)?.focusField()
+
         observeKeys()
         observeResignation(of: panel)
     }
@@ -95,8 +97,7 @@ final class SearchPanelController {
         // window of its own.
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
 
-        let view = SearchPanelView(model: model) { [weak self] in self?.hide() }
-        panel.contentView = NSHostingView(rootView: view)
+        panel.contentView = SearchPanelContentView(model: model) { [weak self] in self?.hide() }
         return panel
     }
 
@@ -132,6 +133,15 @@ final class SearchPanelController {
     private func handle(_ event: NSEvent) -> Bool {
         let command = event.modifierFlags.contains(.command)
 
+        if command, let action = editingAction(for: event) {
+            // An LSUIElement app has no main menu, and ⌘A, ⌘C, ⌘V, ⌘X and ⌘Z are menu key
+            // equivalents rather than key bindings — with no menu to carry them, AppKit never
+            // dispatches them and the field appears to ignore the standard shortcuts. Sending
+            // them to the responder chain by hand is what a menu would have done.
+            NSApp.sendAction(action, to: nil, from: nil)
+            return true
+        }
+
         switch Int(event.keyCode) {
         case kVK_DownArrow:
             if command { model.moveToEdge(1) } else { model.move(by: 1) }
@@ -165,6 +175,20 @@ final class SearchPanelController {
 
         default:
             return false
+        }
+    }
+
+    /// The field editor implements all of these; they just need something to deliver them.
+    /// Selectors by name because `#selector(NSText.copy(_:))` collides with `NSObject.copy()`.
+    private func editingAction(for event: NSEvent) -> Selector? {
+        switch event.charactersIgnoringModifiers?.lowercased() {
+        case "a": return Selector(("selectAll:"))
+        case "c": return Selector(("copy:"))
+        case "v": return Selector(("paste:"))
+        case "x": return Selector(("cut:"))
+        case "z": return event.modifierFlags.contains(.shift)
+            ? Selector(("redo:")) : Selector(("undo:"))
+        default: return nil
         }
     }
 

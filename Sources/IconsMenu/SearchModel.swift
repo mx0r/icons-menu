@@ -1,25 +1,36 @@
 import AppKit
 
 /// What the search panel is showing, and what Return does to it.
+///
+/// Deliberately not an `ObservableObject`: the panel is AppKit, and a plain callback is both
+/// the whole of what it needs and one less thing that can silently fail to fire.
 @MainActor
-final class SearchModel: ObservableObject {
+final class SearchModel {
 
-    @Published var query = "" {
+    /// Fired after anything the panel draws has changed.
+    var onChange: (() -> Void)?
+
+    var query = "" {
         didSet {
             guard query != oldValue else { return }
             refilter()
         }
     }
 
-    @Published private(set) var results: [SearchIndex.Row] = []
-    @Published private(set) var applications: [SearchIndex.Application] = []
+    private(set) var results: [SearchIndex.Row] = []
+    private(set) var applications: [SearchIndex.Application] = []
 
     /// Set by pressing Return on an application, which narrows the search to it. Not required
     /// for anything — every row is reachable by typing — but it makes browsing one app's menu
     /// possible without knowing what is in it.
-    @Published private(set) var scope: SearchIndex.Application?
+    private(set) var scope: SearchIndex.Application?
 
-    @Published var selection = 0
+    var selection = 0 {
+        didSet {
+            guard selection != oldValue else { return }
+            onChange?()
+        }
+    }
 
     /// Nothing typed and nothing scoped: the applications, which is the closest thing to the
     /// dropdown's own list and a better starting point than several hundred rows.
@@ -36,8 +47,7 @@ final class SearchModel: ObservableObject {
     }
 
     /// Rebuilt from the cache every time the panel opens — cheap, and it means a menu that
-    /// changed since the last scan is not carried over any longer than the dropdown carries
-    /// it either.
+    /// changed since the last scan is not carried any longer than the dropdown carries it.
     func reload() {
         allRows = SearchIndex.rows(in: inventory(), where: preferences.isVisible)
         applications = SearchIndex.applications(for: allRows)
@@ -53,12 +63,12 @@ final class SearchModel: ObservableObject {
     func move(by offset: Int) {
         guard count > 0 else { return }
         // Clamped rather than wrapped: holding ↓ should come to rest at the end of the list,
-        // not cycle back to the top past the row you were aiming at.
+        // not cycle back past the row you were aiming at.
         selection = min(max(selection + offset, 0), count - 1)
     }
 
-    func moveToEdge(_ offset: Int) {
-        selection = offset < 0 ? 0 : max(count - 1, 0)
+    func moveToEdge(_ direction: Int) {
+        selection = direction < 0 ? 0 : max(count - 1, 0)
     }
 
     /// Escape and backspace-on-empty both land here.
@@ -73,7 +83,7 @@ final class SearchModel: ObservableObject {
     }
 
     /// Clicking a row is the same as selecting it and pressing Return — the mouse is not the
-    /// point here, but a panel that ignores it would be odd.
+    /// point here, but a panel that ignored it would be odd.
     func activateSelection(at index: Int) -> Bool {
         selection = index
         return activateSelection()
@@ -86,7 +96,7 @@ final class SearchModel: ObservableObject {
 
             let rows = allRows.filter { $0.bundleID == app.bundleID }
             // An application with exactly one row has nothing to browse, so Return does the
-            // obvious thing instead of making the user press it twice.
+            // obvious thing rather than making the user press it twice.
             if let only = rows.first, rows.count == 1 {
                 activate(only)
                 return true
@@ -114,11 +124,12 @@ final class SearchModel: ObservableObject {
         let pool = scope.map { scope in allRows.filter { $0.bundleID == scope.bundleID } } ?? allRows
         results = SearchIndex.filter(pool, query: query)
         selection = 0
+        onChange?()
     }
 }
 
 extension Array {
-    /// Selection and the list it indexes are published separately, so a stale index can
+    /// The selection is held separately from the list it indexes, so a stale index can
     /// briefly outlive the list it came from.
     subscript(safe index: Int) -> Element? {
         indices.contains(index) ? self[index] : nil

@@ -41,11 +41,22 @@ final class Preferences: ObservableObject {
         }
     }
 
+    /// Off means no system-wide shortcut is registered at all, which is the only way to give
+    /// a combination back to another application. The shortcut itself is remembered, so
+    /// switching it on again does not mean recording it again.
+    @Published var isHotkeyEnabled: Bool {
+        didSet {
+            guard isHotkeyEnabled != oldValue else { return }
+            defaults.set(isHotkeyEnabled, forKey: Key.hotkeyEnabled)
+        }
+    }
+
     private let defaults: UserDefaults
 
     private enum Key {
         static let hidden = "HiddenBundleIDs"
         static let hiddenItems = "HiddenItemIDs"
+        static let hotkeyEnabled = "HotkeyEnabled"
         static let hotkeyKeyCode = "HotkeyKeyCode"
         static let hotkeyModifiers = "HotkeyModifiers"
         static let hotkeyLabel = "HotkeyLabel"
@@ -55,6 +66,8 @@ final class Preferences: ObservableObject {
         self.defaults = defaults
         hiddenBundleIDs = Set(defaults.stringArray(forKey: Key.hidden) ?? [])
         hiddenItemIDs = Set(defaults.stringArray(forKey: Key.hiddenItems) ?? [])
+        // Absent means on: the shortcut is how the app stays reachable when its icon is not.
+        isHotkeyEnabled = defaults.object(forKey: Key.hotkeyEnabled) as? Bool ?? true
 
         // All three parts or none: a half-written shortcut would register something the label
         // does not describe, which is worse than falling back to the default.

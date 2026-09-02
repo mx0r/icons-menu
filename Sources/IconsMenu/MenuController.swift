@@ -155,6 +155,12 @@ final class MenuController: NSObject, NSMenuDelegate {
         // Dropped before registering: Carbon refuses a duplicate, and re-registering the same
         // combination is the common case when only the label changed.
         hotkey = nil
+
+        guard preferences.isHotkeyEnabled else {
+            statusItem.button?.toolTip = "Icons Menu — reach any menu bar item"
+            return
+        }
+
         hotkey = GlobalHotkey.register(shortcut) { [weak self] in
             MainActor.assumeIsolated {
                 guard let self else { return }
@@ -175,11 +181,21 @@ final class MenuController: NSObject, NSMenuDelegate {
 
     private func observeHotkeyChanges() {
         // `dropFirst` because `@Published` replays the current value on subscribe, which init
-        // has just registered.
+        // has just registered. The switch and the combination both land here — turning it off
+        // has to actually unregister, or the combination stays claimed from every other app's
+        // point of view.
         hotkeyObserver = preferences.$hotkey
             .dropFirst()
-            .sink { [weak self] shortcut in
-                MainActor.assumeIsolated { self?.installHotkey(shortcut) }
+            .map { _ in () }
+            .merge(with: preferences.$isHotkeyEnabled.dropFirst().map { _ in () })
+            // `@Published` fires in `willSet`, so without hopping a turn the property still
+            // holds the old value when this reads it back.
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.installHotkey(self.preferences.hotkey)
+                }
             }
     }
 

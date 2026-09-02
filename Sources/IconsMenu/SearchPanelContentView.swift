@@ -1,0 +1,388 @@
+import AppKit
+
+/// The panel's insides: a search field, a table of matches, and a hint bar.
+///
+/// AppKit rather than SwiftUI. A plain `NSTextField` is a real text field — selection,
+/// double-click-to-select-a-word, the standard editing key bindings and an undo stack all
+/// come with it — and an `NSTableView` needs no persuading to keep a keyboard selection in
+/// view.
+final class SearchPanelContentView: NSVisualEffectView {
+
+    private let model: SearchModel
+    private let onActivate: () -> Void
+
+    private let magnifier = NSImageView()
+    private let field = NSTextField()
+    private let scopeChip = NSTextField(labelWithString: "")
+    private let table = NSTableView()
+    private let scroll = NSScrollView()
+    private let hint = NSTextField(labelWithString: "")
+    private let counter = NSTextField(labelWithString: "")
+
+    private var chipGap: NSLayoutConstraint!
+    private var fieldGap: NSLayoutConstraint!
+
+    private enum Metrics {
+        static let rowHeight: CGFloat = 38
+        static let headerHeight: CGFloat = 54
+        static let footerHeight: CGFloat = 30
+        static let inset: CGFloat = 14
+        static let icon: CGFloat = 20
+        static let gap: CGFloat = 9
+    }
+
+    init(model: SearchModel, onActivate: @escaping () -> Void) {
+        self.model = model
+        self.onActivate = onActivate
+        super.init(frame: .zero)
+
+        material = .popover
+        blendingMode = .behindWindow
+        state = .active
+        wantsLayer = true
+        layer?.cornerRadius = 12
+        layer?.cornerCurve = .continuous
+        layer?.masksToBounds = true
+
+        buildField()
+        buildTable()
+        buildFooter()
+        layOut()
+
+        model.onChange = { [weak self] in self?.refresh() }
+        refresh()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    /// Called after the panel is on screen: a field cannot become first responder before its
+    /// window exists.
+    func focusField() {
+        window?.makeFirstResponder(field)
+    }
+
+    // MARK: - Building
+
+    private func buildField() {
+        magnifier.image = NSImage(
+            systemSymbolName: "magnifyingglass",
+            accessibilityDescription: nil
+        )
+        magnifier.symbolConfiguration = .init(pointSize: 15, weight: .medium)
+        magnifier.contentTintColor = .secondaryLabelColor
+
+        field.isBordered = false
+        field.drawsBackground = false
+        field.focusRingType = .none
+        field.font = .systemFont(ofSize: 19, weight: .regular)
+        field.placeholderString = "Search every menu bar item"
+        field.delegate = self
+        // Return is handled by the panel's key monitor, well before the field's action would
+        // fire; this only stops AppKit beeping if it ever gets that far.
+        field.target = nil
+        field.action = nil
+
+        scopeChip.font = .systemFont(ofSize: 12, weight: .medium)
+        scopeChip.wantsLayer = true
+        scopeChip.layer?.cornerRadius = 5
+        scopeChip.layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.18).cgColor
+        scopeChip.isHidden = true
+    }
+
+    private func buildTable() {
+        let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("row"))
+        column.resizingMask = .autoresizingMask
+        table.addTableColumn(column)
+
+        table.headerView = nil
+        table.rowHeight = Metrics.rowHeight
+        table.intercellSpacing = NSSize(width: 0, height: 2)
+        table.backgroundColor = .clear
+        // `.plain` so rows start where the field's text starts; `.inset` adds a margin of its
+        // own and pushes the icon column out of line with the magnifier above it.
+        table.style = .plain
+        // AppKit's own highlight greys out whenever the table is not first responder, and the
+        // field holds focus for the whole life of the panel — so the selection is drawn by the
+        // row instead.
+        table.selectionHighlightStyle = .none
+        table.allowsEmptySelection = true
+        table.allowsMultipleSelection = false
+        // The field keeps focus for the whole life of the panel; the table is driven from the
+        // model, never from its own first-responder state.
+        table.refusesFirstResponder = true
+        table.dataSource = self
+        table.delegate = self
+        table.target = self
+        table.action = #selector(rowClicked)
+
+        scroll.documentView = table
+        scroll.drawsBackground = false
+        scroll.hasVerticalScroller = true
+        scroll.automaticallyAdjustsContentInsets = false
+    }
+
+    private func buildFooter() {
+        for label in [hint, counter] {
+            label.font = .systemFont(ofSize: 11)
+            label.textColor = .secondaryLabelColor
+        }
+        counter.alignment = .right
+    }
+
+    private func layOut() {
+        let divider = NSBox()
+        divider.boxType = .separator
+        let footerDivider = NSBox()
+        footerDivider.boxType = .separator
+
+        for view in [magnifier, field, scopeChip, scroll, divider, footerDivider, hint, counter] {
+            view.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(view)
+        }
+
+        // A layout guide rather than a tall text field: a single-line `NSTextField` draws its
+        // text at the top of its frame, so stretching it to the header's height leaves the
+        // text high and everything aligned to it visibly low.
+        let header = NSLayoutGuide()
+        addLayoutGuide(header)
+
+        // Held on to because the gaps around the scope chip close up when there is no chip —
+        // a hidden view still takes part in Auto Layout, spacing and all.
+        chipGap = scopeChip.leadingAnchor.constraint(equalTo: magnifier.trailingAnchor)
+        fieldGap = field.leadingAnchor.constraint(
+            equalTo: scopeChip.trailingAnchor,
+            constant: Metrics.gap
+        )
+
+        NSLayoutConstraint.activate([
+            header.topAnchor.constraint(equalTo: topAnchor),
+            header.leadingAnchor.constraint(equalTo: leadingAnchor),
+            header.trailingAnchor.constraint(equalTo: trailingAnchor),
+            header.heightAnchor.constraint(equalToConstant: Metrics.headerHeight),
+
+            // The magnifier occupies the same column as the rows' application icons, so the
+            // query and the results it produces line up.
+            magnifier.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Metrics.inset),
+            magnifier.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+            magnifier.widthAnchor.constraint(equalToConstant: Metrics.icon),
+
+            chipGap,
+            scopeChip.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+
+            fieldGap,
+            field.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Metrics.inset),
+            field.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+
+            divider.topAnchor.constraint(equalTo: header.bottomAnchor),
+            divider.leadingAnchor.constraint(equalTo: leadingAnchor),
+            divider.trailingAnchor.constraint(equalTo: trailingAnchor),
+
+            scroll.topAnchor.constraint(equalTo: divider.bottomAnchor),
+            scroll.leadingAnchor.constraint(equalTo: leadingAnchor),
+            scroll.trailingAnchor.constraint(equalTo: trailingAnchor),
+            scroll.bottomAnchor.constraint(equalTo: footerDivider.topAnchor),
+
+            footerDivider.leadingAnchor.constraint(equalTo: leadingAnchor),
+            footerDivider.trailingAnchor.constraint(equalTo: trailingAnchor),
+            footerDivider.bottomAnchor.constraint(
+                equalTo: bottomAnchor, constant: -Metrics.footerHeight
+            ),
+
+            hint.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Metrics.inset),
+            hint.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8),
+
+            counter.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Metrics.inset),
+            counter.bottomAnchor.constraint(equalTo: hint.bottomAnchor),
+        ])
+    }
+
+    // MARK: - Drawing what the model says
+
+    private func refresh() {
+        if field.stringValue != model.query { field.stringValue = model.query }
+
+        if let scope = model.scope {
+            scopeChip.stringValue = " \(scope.name) "
+            scopeChip.isHidden = false
+            chipGap.constant = Metrics.gap
+            fieldGap.constant = 6
+            field.placeholderString = "Search \(scope.name)"
+        } else {
+            scopeChip.stringValue = ""
+            scopeChip.isHidden = true
+            chipGap.constant = 0
+            fieldGap.constant = Metrics.gap
+            field.placeholderString = "Search every menu bar item"
+        }
+
+        table.reloadData()
+
+        if model.count > 0, model.selection < model.count {
+            table.selectRowIndexes([model.selection], byExtendingSelection: false)
+            table.scrollRowToVisible(model.selection)
+        } else {
+            table.deselectAll(nil)
+        }
+
+        hint.stringValue = [
+            "↑↓ move",
+            model.showsApplications ? "↩ open or narrow" : "↩ activate",
+            model.scope == nil ? "esc close" : "esc back",
+        ].joined(separator: "   ·   ")
+
+        counter.stringValue = model.count == 0 ? "no matches" : "\(model.count)"
+    }
+
+    @objc private func rowClicked() {
+        let row = table.clickedRow
+        guard row >= 0 else { return }
+        if model.activateSelection(at: row) { onActivate() }
+    }
+}
+
+// MARK: - Text
+
+extension SearchPanelContentView: NSTextFieldDelegate {
+    func controlTextDidChange(_ notification: Notification) {
+        model.query = field.stringValue
+    }
+}
+
+// MARK: - Rows
+
+extension SearchPanelContentView: NSTableViewDataSource, NSTableViewDelegate {
+
+    func numberOfRows(in tableView: NSTableView) -> Int {
+        model.count
+    }
+
+    func tableView(_ tableView: NSTableView, viewFor column: NSTableColumn?, row index: Int)
+        -> NSView?
+    {
+        let view =
+            tableView.makeView(withIdentifier: SearchRowView.identifier, owner: self)
+            as? SearchRowView ?? SearchRowView()
+
+        if model.showsApplications {
+            guard let app = model.applications[safe: index] else { return view }
+            view.show(
+                pid: app.pid,
+                title: app.name,
+                subtitle: app.rowCount == 1 ? nil : "\(app.rowCount) entries",
+                trailing: app.rowCount == 1 ? nil : "↩ narrows",
+                isEnabled: true,
+                isSelected: index == model.selection
+            )
+        } else {
+            guard let result = model.results[safe: index] else { return view }
+            view.show(
+                pid: result.pid,
+                title: result.title,
+                // Inside a scope every row belongs to the same application, so naming it on
+                // each one is noise. What is left is the submenu path, where there is one.
+                subtitle: result.subtitle(includingApp: model.scope == nil),
+                trailing: nil,
+                isEnabled: result.isEnabled,
+                isSelected: index == model.selection
+            )
+        }
+        return view
+    }
+
+    func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool { true }
+}
+
+/// One row: the owning application's icon, what the row does, and where it lives.
+private final class SearchRowView: NSTableCellView {
+
+    static let identifier = NSUserInterfaceItemIdentifier("SearchRowView")
+
+    private let highlight = NSView()
+    private let icon = NSImageView()
+    private let title = NSTextField(labelWithString: "")
+    private let subtitle = NSTextField(labelWithString: "")
+    private let trailing = NSTextField(labelWithString: "")
+
+    init() {
+        super.init(frame: .zero)
+        identifier = SearchRowView.identifier
+
+        title.font = .systemFont(ofSize: 13.5)
+        title.lineBreakMode = .byTruncatingTail
+        subtitle.font = .systemFont(ofSize: 11)
+        subtitle.textColor = .secondaryLabelColor
+        subtitle.lineBreakMode = .byTruncatingMiddle
+        trailing.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+        trailing.textColor = .tertiaryLabelColor
+
+        let text = NSStackView(views: [title, subtitle])
+        text.orientation = .vertical
+        text.alignment = .leading
+        text.spacing = 0
+
+        // An empty view with the weakest hugging in the stack is what pushes the trailing
+        // label to the right edge; without the priorities it collapses to nothing.
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(NSLayoutConstraint.Priority(1), for: .horizontal)
+        spacer.setContentCompressionResistancePriority(
+            NSLayoutConstraint.Priority(1), for: .horizontal
+        )
+
+        let row = NSStackView(views: [icon, text, spacer, trailing])
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 9
+        // 14 on the left, matching the magnifier above, so the icon column and the query line
+        // up down the whole panel.
+        row.edgeInsets = NSEdgeInsets(top: 0, left: 14, bottom: 0, right: 14)
+
+        highlight.wantsLayer = true
+        highlight.layer?.cornerRadius = 7
+        highlight.layer?.cornerCurve = .continuous
+        highlight.isHidden = true
+
+        for view in [highlight, row] {
+            view.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(view)
+        }
+
+        NSLayoutConstraint.activate([
+            icon.widthAnchor.constraint(equalToConstant: 20),
+            icon.heightAnchor.constraint(equalToConstant: 20),
+            row.leadingAnchor.constraint(equalTo: leadingAnchor),
+            row.trailingAnchor.constraint(equalTo: trailingAnchor),
+            row.topAnchor.constraint(equalTo: topAnchor),
+            row.bottomAnchor.constraint(equalTo: bottomAnchor),
+
+            highlight.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6),
+            highlight.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
+            highlight.topAnchor.constraint(equalTo: topAnchor, constant: 1),
+            highlight.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -1),
+        ])
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    func show(
+        pid: pid_t,
+        title: String,
+        subtitle: String?,
+        trailing: String?,
+        isEnabled: Bool,
+        isSelected: Bool
+    ) {
+        icon.image = NSRunningApplication(processIdentifier: pid)?.icon
+        self.title.stringValue = title
+        self.subtitle.stringValue = subtitle ?? ""
+        self.subtitle.isHidden = subtitle == nil
+        self.trailing.stringValue = trailing ?? ""
+        self.trailing.isHidden = trailing == nil || !isSelected
+        alphaValue = isEnabled ? 1 : 0.45
+
+        highlight.isHidden = !isSelected
+        highlight.layer?.backgroundColor =
+            NSColor.controlAccentColor.withAlphaComponent(0.22).cgColor
+    }
+}
